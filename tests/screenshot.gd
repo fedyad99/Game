@@ -1,9 +1,10 @@
 extends SceneTree
-## Скриншоты для проверки картинки: xvfb-run godot --rendering-method gl_compatibility --path . -s tests/screenshot.gd -- out_dir
+## Скриншоты для проверки картинки:
+## xvfb-run godot --rendering-method gl_compatibility --path . -s tests/screenshot.gd -- <папка>
 var main: Node
 var frames := 0
 var out := "user://"
-const SHOTS := {60: Vector3(0, 0.1, -14), 150: Vector3(-6, 0.1, -50), 240: Vector3(0, 0.1, -150), 330: Vector3(0, 0.1, -60)}
+
 
 func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -12,13 +13,36 @@ func _initialize() -> void:
 	main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 
+
+func _shot(name_: String) -> void:
+	root.get_viewport().get_texture().get_image().save_png("%s/%s.png" % [out, name_])
+
+
 func _process(_d: float) -> bool:
 	frames += 1
-	for f in SHOTS:
-		if frames == f - 40:
-			main.player.global_position = SHOTS[f]
-		if frames == f:
-			root.get_viewport().get_texture().get_image().save_png("%s/shot_%d.png" % [out, f])
-	if frames == 100:
-		main.player.touch_attack = true
-	return frames > 340
+	var p = main.player
+	match frames:
+		5:
+			p.global_position = Vector3(6, 0.1, -19)
+		60:
+			_shot("game")
+		61:
+			p.add_xp(6)   # новый уровень → выбор карточек
+		100:
+			_shot("cards")
+		101:
+			var cards = root.get_node("Cards")
+			for id in ["dmg_up", "dmg_up", "whirlwind", "crit", "lifesteal", "hp_up", "armor"]:
+				p.apply_card(cards.by_id(id))
+			main.card_panel.visible = false
+			main.pending_levelups = 0
+			paused = false
+			main.deck_panel.show_deck(p.cards_taken, p)
+		130:
+			_shot("deck")
+		131:
+			main.deck_panel.hide_deck()
+			p.global_position = Vector3(0, 0.1, -48)
+		200:
+			_shot("boss")
+	return frames > 200

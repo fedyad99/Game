@@ -18,6 +18,7 @@ var stats := {
 	"crit_chance": 0.05, "lifesteal": 0.0,
 }
 var skills: Array[String] = []
+var cards_taken: Array = []   # id взятых карточек по порядку
 var hp := 100.0
 var level := 1
 var xp := 0
@@ -186,6 +187,7 @@ func add_xp(amount: int) -> void:
 
 
 func apply_card(card: Dictionary) -> void:
+	cards_taken.append(card.id)
 	if card.has("skill"):
 		skills.append(card.skill)
 	elif card.has("stat"):

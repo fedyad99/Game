@@ -5,6 +5,8 @@ const PlayerScript := preload("res://scripts/player/player.gd")
 const EnemyScript := preload("res://scripts/enemies/enemy.gd")
 const CardPanel := preload("res://scripts/ui/card_panel.gd")
 const TouchControls := preload("res://scripts/ui/touch_controls.gd")
+const Hud := preload("res://scripts/ui/hud.gd")
+const DeckPanel := preload("res://scripts/ui/deck_panel.gd")
 const MapData := preload("res://scripts/maps/forest_map.gd")
 const WorldBuilder := preload("res://scripts/maps/world_builder.gd")
 
@@ -21,14 +23,8 @@ var kills := 0
 var gold := 0
 var respawns: Array = []   # [{kind, power, home, t}]
 
-var hud_label: Label
-var hp_bar: ProgressBar
-var hp_text: Label
-var xp_bar: ProgressBar
-var xp_text: Label
-var boss_box: VBoxContainer
-var boss_name: Label
-var boss_bar: ProgressBar
+var hud: Control
+var deck_panel: Control
 var card_panel: Control
 var end_panel: PanelContainer
 var end_label: Label
@@ -86,37 +82,9 @@ func _build_ui() -> void:
 	var ui := CanvasLayer.new()
 	ui.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(ui)
-	var box := VBoxContainer.new()
-	box.position = Vector2(16, 16)
-	box.add_theme_constant_override("separation", 6)
-	ui.add_child(box)
-	hud_label = Label.new()
-	hud_label.add_theme_font_size_override("font_size", 20)
-	hud_label.add_theme_constant_override("outline_size", 6)
-	box.add_child(hud_label)
-	var hp := _bar_with_text(Color(0.85, 0.2, 0.2), Vector2(340, 28))
-	hp_bar = hp[0]
-	hp_text = hp[1]
-	box.add_child(hp_bar)
-	var xp := _bar_with_text(Color(0.3, 0.6, 1.0), Vector2(340, 22))
-	xp_bar = xp[0]
-	xp_text = xp[1]
-	box.add_child(xp_bar)
-
-	# Полоска босса сверху по центру — появляется, когда босс в бою
-	boss_box = VBoxContainer.new()
-	boss_box.set_anchors_preset(Control.PRESET_CENTER_TOP)
-	boss_box.position = Vector2(-260, 16)
-	boss_box.custom_minimum_size = Vector2(520, 0)
-	boss_box.visible = false
-	ui.add_child(boss_box)
-	boss_name = Label.new()
-	boss_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	boss_name.add_theme_font_size_override("font_size", 22)
-	boss_name.add_theme_constant_override("outline_size", 6)
-	boss_box.add_child(boss_name)
-	boss_bar = _bar_with_text(Color(0.6, 0.15, 0.7), Vector2(520, 20))[0]
-	boss_box.add_child(boss_bar)
+	hud = Hud.new()
+	hud.deck_pressed.connect(_toggle_deck)
+	ui.add_child(hud)
 
 	var touch := TouchControls.new()
 	touch.player = player
@@ -129,12 +97,23 @@ func _build_ui() -> void:
 	card_panel.card_chosen.connect(_on_card_chosen)
 	ui.add_child(card_panel)
 
+	deck_panel = DeckPanel.new()
+	deck_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ui.add_child(deck_panel)
+
 	var center := CenterContainer.new()
 	center.set_anchors_preset(Control.PRESET_FULL_RECT)
 	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	ui.add_child(center)
 	end_panel = PanelContainer.new()
 	end_panel.visible = false
+	var eb := StyleBoxFlat.new()
+	eb.bg_color = Color(0.08, 0.06, 0.1, 0.95)
+	eb.border_color = Color(0.95, 0.75, 0.3)
+	eb.set_border_width_all(3)
+	eb.set_corner_radius_all(16)
+	eb.set_content_margin_all(28)
+	end_panel.add_theme_stylebox_override("panel", eb)
 	center.add_child(end_panel)
 	var ev := VBoxContainer.new()
 	ev.add_theme_constant_override("separation", 16)
@@ -146,46 +125,41 @@ func _build_ui() -> void:
 	var again := Button.new()
 	again.text = "Начать заново"
 	again.custom_minimum_size = Vector2(260, 64)
+	again.add_theme_font_size_override("font_size", 22)
+	for st in ["normal", "hover", "pressed"]:
+		var bs := StyleBoxFlat.new()
+		bs.bg_color = Color(0.45, 0.12, 0.1) if st == "normal" else Color(0.6, 0.18, 0.12)
+		bs.border_color = Color(0.95, 0.75, 0.3)
+		bs.set_border_width_all(2)
+		bs.set_corner_radius_all(10)
+		again.add_theme_stylebox_override(st, bs)
 	again.pressed.connect(func():
 		get_tree().paused = false
 		get_tree().reload_current_scene())
 	ev.add_child(again)
 
 
-## Полоска с числом поверх: возвращает [ProgressBar, Label].
-func _bar_with_text(c: Color, size: Vector2) -> Array:
-	var b := ProgressBar.new()
-	b.custom_minimum_size = size
-	b.show_percentage = false
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = c
-	fill.set_corner_radius_all(4)
-	b.add_theme_stylebox_override("fill", fill)
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color(0, 0, 0, 0.6)
-	bg.set_corner_radius_all(4)
-	b.add_theme_stylebox_override("background", bg)
-	var l := Label.new()
-	l.set_anchors_preset(Control.PRESET_FULL_RECT)
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	l.add_theme_font_size_override("font_size", int(size.y * 0.65))
-	l.add_theme_constant_override("outline_size", 5)
-	l.add_theme_color_override("font_outline_color", Color.BLACK)
-	b.add_child(l)
-	return [b, l]
-
-
 func _on_hp_changed(hp: float, mx: float) -> void:
-	hp_bar.max_value = mx
-	hp_bar.value = hp
-	hp_text.text = "%d / %d" % [ceil(hp), mx]
+	hud.hp = hp
+	hud.max_hp = mx
 
 
 func _on_xp_changed(xp: int, need: int, lvl: int) -> void:
-	xp_bar.max_value = need
-	xp_bar.value = xp
-	xp_text.text = "Уровень %d   —   %d / %d опыта" % [lvl, xp, need]
+	hud.xp = xp
+	hud.xp_need = need
+	hud.set_level(lvl)
+
+
+func _toggle_deck() -> void:
+	if deck_panel.visible:
+		deck_panel.hide_deck()
+	elif not card_panel.visible and not finished:
+		deck_panel.show_deck(player.cards_taken, player)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_TAB:
+		_toggle_deck()
 
 
 # ---------- Игровой цикл ----------
@@ -198,21 +172,22 @@ func _process(delta: float) -> void:
 	if finished:
 		return
 	run_time += delta
-	hud_label.text = "Время %d:%02d     Убито: %d     Золото: %d" % [int(run_time) / 60, int(run_time) % 60, kills, gold]
+	hud.time_s = run_time
+	hud.kills = kills
+	hud.gold = gold
+	hud.skill_ratio = clamp(player.whirl_cooldown / 4.0, 0.0, 1.0) if "whirlwind" in player.skills else -1.0
 	_update_boss_bar()
 	_update_respawns(delta)
 
 
 func _update_boss_bar() -> void:
-	var shown := false
+	hud.boss_name = ""
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if e.is_boss and e.state == "chase":
-			boss_name.text = e.display_name
-			boss_bar.max_value = e.max_hp
-			boss_bar.value = e.hp
-			shown = true
+			hud.boss_name = e.display_name
+			hud.boss_max = e.max_hp
+			hud.boss_hp = e.hp
 			break
-	boss_box.visible = shown
 
 
 func _update_respawns(delta: float) -> void:
@@ -269,7 +244,7 @@ func _on_level_up() -> void:
 
 func _show_cards() -> void:
 	get_tree().paused = true
-	card_panel.show_cards(Cards.roll(player.player_class, player.skills))
+	card_panel.show_cards(Cards.roll(player.player_class, player.skills), player.level - pending_levelups + 1)
 
 
 func _on_card_chosen(card: Dictionary) -> void:
