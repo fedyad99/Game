@@ -1,7 +1,9 @@
 extends CharacterBody3D
-## Воин: ручное движение и удар мечом по дуге перед собой.
+## Воин: ручное движение и удар мечом по одной цели (ближайший враг рядом).
 
 const FloatingText := preload("res://scripts/ui/floating_text.gd")
+const CharacterModel := preload("res://scripts/game/character_model.gd")
+const KNIGHT := "res://assets/kaykit/adventurers/Knight.glb"
 
 signal hp_changed(hp: float, max_hp: float)
 signal xp_changed(xp: int, need: int, level: int)
@@ -27,45 +29,36 @@ var out_of_combat := 0.0   # секунд без урона; после 4 с и�
 var touch_move := Vector2.ZERO   # из виртуального стика
 var touch_attack := false
 
-var _swing: MeshInstance3D
+var model: Node3D
+var _whirl_fx: MeshInstance3D
 
 
 func _ready() -> void:
 	add_to_group("players")
 	var col := CollisionShape3D.new()
-	col.shape = CapsuleShape3D.new()
+	var cap := CapsuleShape3D.new()
+	cap.radius = 0.45
+	col.shape = cap
 	col.position.y = 1.0
 	add_child(col)
-	var body := MeshInstance3D.new()
-	body.mesh = CapsuleMesh.new()
-	body.position.y = 1.0
-	body.material_override = _mat(Color(0.25, 0.5, 1.0))
-	add_child(body)
-	var nose := MeshInstance3D.new()
-	var box := BoxMesh.new()
-	box.size = Vector3(0.3, 0.3, 0.6)
-	nose.mesh = box
-	nose.position = Vector3(0, 1.4, -0.5)
-	nose.material_override = _mat(Color(0.9, 0.9, 0.9))
-	add_child(nose)
-	_swing = MeshInstance3D.new()
+	model = CharacterModel.new()
+	add_child(model)
+	model.setup(KNIGHT, ["1H_Sword_Offhand", "Badge_Shield", "Rectangle_Shield", "Spike_Shield", "2H_Sword"])
+	# Круг для навыка «Вихрь» (удар по области — только у навыка)
+	_whirl_fx = MeshInstance3D.new()
 	var disc := CylinderMesh.new()
-	disc.top_radius = stats.attack_range
-	disc.bottom_radius = stats.attack_range
+	disc.top_radius = 1.0
+	disc.bottom_radius = 1.0
 	disc.height = 0.05
-	_swing.mesh = disc
-	_swing.position.y = 0.3
-	var sm := _mat(Color(1, 1, 0.5, 0.35))
+	_whirl_fx.mesh = disc
+	_whirl_fx.position.y = 0.15
+	var sm := StandardMaterial3D.new()
+	sm.albedo_color = Color(1, 1, 0.6, 0.35)
 	sm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_swing.material_override = sm
-	_swing.visible = false
-	add_child(_swing)
-
-
-func _mat(c: Color) -> StandardMaterial3D:
-	var m := StandardMaterial3D.new()
-	m.albedo_color = c
-	return m
+	sm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_whirl_fx.material_override = sm
+	_whirl_fx.visible = false
+	add_child(_whirl_fx)
 
 
 func xp_needed() -> int:
@@ -89,6 +82,10 @@ func _physics_process(delta: float) -> void:
 		facing = v.normalized()
 		look_at(global_position + facing, Vector3.UP)
 	move_and_slide()
+	if v.length() > 0.1:
+		model.play("Running_A", 0.8 + 0.4 * stats.move_speed_mult)
+	else:
+		model.play("Idle")
 
 	out_of_combat += delta
 	var regen: float = stats.regen + (stats.max_hp * 0.05 if out_of_combat > 4.0 else 0.0)
@@ -106,13 +103,29 @@ func _physics_process(delta: float) -> void:
 
 func attack() -> void:
 	attack_cooldown = 0.5 / stats.attack_speed_mult
-	_auto_aim()
-	_flash_swing()
-	for e in get_tree().get_nodes_in_group("enemies"):
-		var to: Vector3 = e.global_position - global_position
+	var target := _find_target()
+	if target:
+		var to := target.global_position - global_position
 		to.y = 0
-		if to.length() <= stats.attack_range * e.scale.x and facing.dot(to.normalized()) > 0.0:
-			_hit(e, 1.0)
+		if to.length() > 0.01:
+			facing = to.normalized()
+			look_at(global_position + facing, Vector3.UP)
+		_hit(target, 1.0)
+	model.play_once("1H_Melee_Attack_Chop", min(0.5 / stats.attack_speed_mult, 0.6))
+
+
+## Цель удара: ближайший враг в пределах дальности (с учётом его размера).
+func _find_target() -> Node3D:
+	var best := INF
+	var found: Node3D = null
+	for e in get_tree().get_nodes_in_group("enemies"):
+		if e.hp <= 0:
+			continue
+		var d: float = global_position.distance_to(e.global_position) - 0.5 * e.scale.x
+		if d <= stats.attack_range and d < best:
+			best = d
+			found = e
+	return found
 
 
 ## Один удар по врагу: шанс крита (x2) и вампиризм.
@@ -134,34 +147,16 @@ func heal(amount: float, show := true) -> void:
 	hp_changed.emit(hp, stats.max_hp)
 
 
-## Автонаведение: удар разворачивает героя к ближайшему врагу рядом (удобно на телефоне).
-func _auto_aim() -> void:
-	var best: float = stats.attack_range * 1.6
-	var target: Node3D = null
-	for e in get_tree().get_nodes_in_group("enemies"):
-		var d: float = global_position.distance_to(e.global_position) - 0.5 * e.scale.x
-		if d < best:
-			best = d
-			target = e
-	if target:
-		var to := target.global_position - global_position
-		to.y = 0
-		if to.length() > 0.01:
-			facing = to.normalized()
-			look_at(global_position + facing, Vector3.UP)
-
-
 func whirlwind() -> void:
 	whirl_cooldown = 4.0
-	_flash_swing()
+	var radius: float = stats.attack_range * 1.3
+	_whirl_fx.scale = Vector3(radius, 1, radius)
+	_whirl_fx.visible = true
+	get_tree().create_timer(0.2).timeout.connect(func(): _whirl_fx.visible = false)
+	model.play_once("2H_Melee_Attack_Spin", 0.45)
 	for e in get_tree().get_nodes_in_group("enemies"):
-		if e.global_position.distance_to(global_position) <= stats.attack_range * 1.3:
+		if e.global_position.distance_to(global_position) <= radius:
 			_hit(e, 0.8)
-
-
-func _flash_swing() -> void:
-	_swing.visible = true
-	get_tree().create_timer(0.12).timeout.connect(func(): _swing.visible = false)
 
 
 func take_damage(amount: float) -> void:
@@ -171,9 +166,12 @@ func take_damage(amount: float) -> void:
 	var dmg: float = amount * max(stats.damage_taken_mult, 0.2)
 	hp -= dmg
 	FloatingText.spawn(get_parent(), global_position + Vector3(0, 2.3, 0), str(int(round(dmg))), Color(1, 0.3, 0.3))
+	model.flash(Color(1, 0.3, 0.3))
 	if hp <= 0:
 		hp = 0
 		dead = true
+		model.play_once("Death_A", -1.0)
+		model._locked_until = INF
 		died.emit()
 	hp_changed.emit(hp, stats.max_hp)
 

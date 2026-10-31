@@ -3,6 +3,8 @@ extends Control
 
 signal card_chosen(card: Dictionary)
 
+const CLASS_NAMES := {"warrior": "Воин", "archer": "Лучник", "mage": "Маг"}
+
 var _row: HBoxContainer
 
 
@@ -35,7 +37,7 @@ func show_cards(cards: Array) -> void:
 		var b := Button.new()
 		b.custom_minimum_size = Vector2(240, 300)
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		var tag := "" if card["class"] == "" else "\n[%s]" % card["class"]
+		var tag := "" if card["class"] == "" else "\n[%s]" % CLASS_NAMES.get(card["class"], card["class"])
 		b.text = "%s\n\n%s%s" % [card.title, card.desc, tag]
 		b.add_theme_font_size_override("font_size", 22)
 		b.pressed.connect(func(): card_chosen.emit(card))

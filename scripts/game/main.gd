@@ -6,12 +6,14 @@ const EnemyScript := preload("res://scripts/enemies/enemy.gd")
 const CardPanel := preload("res://scripts/ui/card_panel.gd")
 const TouchControls := preload("res://scripts/ui/touch_controls.gd")
 const MapData := preload("res://scripts/maps/forest_map.gd")
+const WorldBuilder := preload("res://scripts/maps/world_builder.gd")
 
 const RESPAWN_TIME := 60.0        # обычные монстры возрождаются через минуту
 const RESPAWN_MIN_DIST := 18.0    # ...но не на глазах у игрока
 const HEAL_ORB_CHANCE := 0.15
 
 var player: CharacterBody3D
+var camera_offset := Vector3(0, 12, 8.5)
 var camera: Camera3D
 var run_time := 0.0
 var finished := false
@@ -55,42 +57,7 @@ func _ready() -> void:
 # ---------- Мир ----------
 
 func _build_world() -> void:
-	var env := WorldEnvironment.new()
-	env.environment = Environment.new()
-	env.environment.background_mode = Environment.BG_COLOR
-	env.environment.background_color = Color(0.45, 0.65, 0.85)
-	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.environment.ambient_light_color = Color(0.7, 0.7, 0.75)
-	add_child(env)
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-55, 35, 0)
-	sun.shadow_enabled = true
-	add_child(sun)
-	for z in MapData.ZONES:
-		_add_box(z[0], z[1], z[2])
-	for w in MapData.WALLS:
-		_add_box(w[0], w[1], Color(0.5, 0.45, 0.4))
-	for r in MapData.ROCKS:
-		_add_box(r + Vector3(0, 1.2, 0), Vector3(2.4, 2.4, 2.4), Color(0.6, 0.58, 0.55))
-
-
-func _add_box(pos: Vector3, size: Vector3, color: Color) -> void:
-	var body := StaticBody3D.new()
-	body.position = pos
-	var col := CollisionShape3D.new()
-	var shape := BoxShape3D.new()
-	shape.size = size
-	col.shape = shape
-	body.add_child(col)
-	var mesh := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = size
-	mesh.mesh = bm
-	var m := StandardMaterial3D.new()
-	m.albedo_color = color
-	mesh.material_override = m
-	body.add_child(mesh)
-	add_child(body)
+	WorldBuilder.new(self, MapData).build()
 
 
 func _place_enemies() -> void:
@@ -104,9 +71,10 @@ func _place_enemies() -> void:
 		_spawn(b[1], b[2], b[0], b[3])
 
 
-func _spawn(kind: String, power: float, pos: Vector3, name_override := "") -> void:
+func _spawn(kind: String, power: float, pos: Vector3, name_override := "", respawned := false) -> void:
 	var e: CharacterBody3D = EnemyScript.new()
 	e.setup(kind, power, name_override)
+	e.spawn_anim = respawned
 	e.position = pos
 	e.killed.connect(_on_enemy_killed.bind(power))
 	add_child(e)
@@ -225,7 +193,7 @@ func _on_xp_changed(xp: int, need: int, lvl: int) -> void:
 func _process(delta: float) -> void:
 	if not is_instance_valid(player):
 		return
-	camera.global_position = player.global_position + Vector3(0, 16, 11)
+	camera.global_position = player.global_position + camera_offset
 	camera.look_at(player.global_position, Vector3.UP)
 	if finished:
 		return
@@ -252,7 +220,7 @@ func _update_respawns(delta: float) -> void:
 		r.t -= delta
 		if r.t <= 0.0 and player.global_position.distance_to(r.home) > RESPAWN_MIN_DIST:
 			respawns.erase(r)
-			_spawn(r.kind, r.power, r.home)
+			_spawn(r.kind, r.power, r.home, "", true)
 
 
 func _on_enemy_killed(e, power: float) -> void:

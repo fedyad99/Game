@@ -7,19 +7,21 @@ signal killed(enemy)
 const FloatingText := preload("res://scripts/ui/floating_text.gd")
 const WorldBar := preload("res://scripts/ui/world_bar.gd")
 const Projectile := preload("res://scripts/enemies/projectile.gd")
+const CharacterModel := preload("res://scripts/game/character_model.gd")
+const SK := "res://assets/kaykit/skeletons/"
 
 ## Базовые характеристики типов. power — множитель зоны (сложнее дальше по карте).
 const TYPES := {
 	"grunt": {"name": "", "hp": 45.0, "dmg": 6.0, "speed": 3.6, "xp": 2, "gold": 1, "scale": 1.0,
-		"color": Color(0.8, 0.3, 0.25), "aggro": 9.0},
+		"model": "Skeleton_Minion", "weapon": "Skeleton_Blade", "color": Color(0.8, 0.3, 0.25), "aggro": 9.0},
 	"archer": {"name": "", "hp": 32.0, "dmg": 7.0, "speed": 3.2, "xp": 3, "gold": 2, "scale": 0.9,
-		"color": Color(0.9, 0.7, 0.2), "aggro": 12.0, "ranged": true},
+		"model": "Skeleton_Rogue", "weapon": "Skeleton_Crossbow", "color": Color(0.9, 0.7, 0.2), "aggro": 12.0, "ranged": true},
 	"brute": {"name": "", "hp": 140.0, "dmg": 13.0, "speed": 2.6, "xp": 5, "gold": 3, "scale": 1.35,
-		"color": Color(0.45, 0.3, 0.2), "aggro": 8.0},
+		"model": "Skeleton_Warrior", "weapon": "Skeleton_Axe", "color": Color(0.45, 0.3, 0.2), "aggro": 8.0},
 	"miniboss": {"name": "Вожак", "hp": 650.0, "dmg": 14.0, "speed": 3.2, "xp": 20, "gold": 15, "scale": 1.8,
-		"color": Color(0.65, 0.3, 0.9), "aggro": 12.0, "boss": true},
-	"boss": {"name": "Король тьмы", "hp": 2400.0, "dmg": 15.0, "speed": 3.0, "xp": 60, "gold": 60, "scale": 2.8,
-		"color": Color(0.18, 0.15, 0.22), "aggro": 16.0, "boss": true},
+		"model": "Skeleton_Warrior", "weapon": "Skeleton_Blade", "offhand": "Skeleton_Shield_Small_A", "color": Color(0.65, 0.3, 0.9), "aggro": 12.0, "boss": true},
+	"boss": {"name": "Король тьмы", "hp": 2400.0, "dmg": 15.0, "speed": 3.0, "xp": 60, "gold": 60, "scale": 2.6,
+		"model": "Skeleton_Mage", "weapon": "Skeleton_Staff", "color": Color(0.18, 0.15, 0.22), "aggro": 16.0, "boss": true},
 }
 
 var kind := "grunt"
@@ -44,7 +46,10 @@ var _casting := 0.0
 var _charge_time := 0.0
 var _charge_dir := Vector3.ZERO
 var _charge_hit := false
-var _mesh: MeshInstance3D
+var model: Node3D
+var _model_info: Dictionary
+var spawn_anim := false   # проиграть «вылезание из земли» (при возрождении)
+var _spawn_lock := 0.0
 var _color := Color.RED
 var _bar: Node3D
 var _telegraph: MeshInstance3D
@@ -63,6 +68,7 @@ func setup(k: String, power: float, name_override := "") -> void:
 	is_boss = t.get("boss", false)
 	display_name = name_override if name_override != "" else t.name
 	_color = t.color
+	_model_info = t
 	scale = Vector3.ONE * t.scale
 	hp = max_hp
 	if k == "boss":
@@ -76,26 +82,19 @@ func _ready() -> void:
 	col.shape = CapsuleShape3D.new()
 	col.position.y = 1.0
 	add_child(col)
-	_mesh = MeshInstance3D.new()
-	_mesh.mesh = CapsuleMesh.new()
-	_mesh.position.y = 1.0
-	var m := StandardMaterial3D.new()
-	m.albedo_color = _color
-	_mesh.material_override = m
-	add_child(_mesh)
+	model = CharacterModel.new()
+	add_child(model)
+	model.setup(SK + _model_info.model + ".glb", [],
+		SK + _model_info.weapon + ".gltf" if _model_info.has("weapon") else "",
+		SK + _model_info.offhand + ".gltf" if _model_info.has("offhand") else "")
 	if is_boss:
-		var crown := MeshInstance3D.new()
-		var b := BoxMesh.new()
-		b.size = Vector3(0.7, 0.25, 0.7)
-		crown.mesh = b
-		crown.position.y = 2.15
-		var cm := StandardMaterial3D.new()
-		cm.albedo_color = Color(1.0, 0.8, 0.1)
-		crown.material_override = cm
-		add_child(crown)
+		model.tint(_color)
+	if spawn_anim:
+		model.play_once("Spawn_Ground_Skeletons", 1.2)
+		_spawn_lock = 1.2
 	_bar = WorldBar.new()
 	_bar.setup(Color(0.9, 0.15, 0.15), 1.3)
-	_bar.position.y = 2.6
+	_bar.position.y = 2.5
 	add_child(_bar)
 	if display_name != "":
 		var lbl := Label3D.new()
@@ -106,7 +105,7 @@ func _ready() -> void:
 		lbl.pixel_size = 0.006
 		lbl.outline_size = 8
 		lbl.modulate = Color(1, 0.85, 0.4)
-		lbl.position.y = 2.95
+		lbl.position.y = 2.85
 		add_child(lbl)
 	_telegraph = MeshInstance3D.new()
 	var disc := CylinderMesh.new()
@@ -151,6 +150,11 @@ func alert(p: Node3D) -> void:
 func _physics_process(delta: float) -> void:
 	hit_cooldown -= delta
 	ability_cooldown -= delta
+	if hp <= 0:
+		return
+	if _spawn_lock > 0.0:
+		_spawn_lock -= delta
+		return
 	velocity.y = 0.0 if is_on_floor() else velocity.y - 20.0 * delta
 	match state:
 		"idle":
@@ -160,6 +164,7 @@ func _physics_process(delta: float) -> void:
 			velocity.x = 0
 			velocity.z = 0
 			move_and_slide()
+			model.play("Idle")
 		"return":
 			var to := home - global_position
 			to.y = 0
@@ -178,6 +183,9 @@ func _move_dir(dir: Vector3, spd: float) -> void:
 	velocity.z = dir.z * spd
 	if dir.length() > 0.1:
 		look_at(global_position + Vector3(dir.x, 0, dir.z), Vector3.UP)
+		model.play("Running_A" if spd > 3.4 else "Walking_D_Skeletons", spd / 3.5)
+	else:
+		model.play("Idle_Combat")
 	move_and_slide()
 
 
@@ -224,6 +232,7 @@ func _chase(delta: float) -> void:
 		if hit_cooldown <= 0.0 and dist < 13.0:
 			hit_cooldown = 1.8
 			_shoot(to.normalized())
+			model.play_once("1H_Ranged_Shoot", 0.6)
 		return
 	var reach := 1.0 + 0.6 * scale.x
 	if dist > reach:
@@ -234,6 +243,7 @@ func _chase(delta: float) -> void:
 		if hit_cooldown <= 0.0:
 			hit_cooldown = 1.7 if is_boss else 1.2
 			target.take_damage(damage)
+			model.play_once("2H_Melee_Attack_Chop" if kind == "brute" else "1H_Melee_Attack_Chop", 0.6)
 
 
 func _shoot(dir: Vector3, spd := 12.0, dmg := -1.0) -> void:
@@ -252,12 +262,14 @@ func _start_ability() -> void:
 		_telegraph.mesh.top_radius = 1.2
 		_telegraph.mesh.bottom_radius = 1.2
 		_telegraph.global_position = global_position + Vector3(0, 0.1, 0)
+		model.play_once("Taunt", _casting)
 	else:
 		ability_cooldown = 5.0
 		_casting = 1.1
 		_telegraph.mesh.top_radius = 5.5
 		_telegraph.mesh.bottom_radius = 5.5
 		_telegraph.global_position = global_position + Vector3(0, 0.1, 0)
+		model.play_once("Spellcast_Raise", _casting)
 	_telegraph.visible = true
 
 
@@ -269,7 +281,9 @@ func _finish_ability() -> void:
 		_charge_dir = to.normalized()
 		_charge_time = 0.55
 		_charge_hit = false
+		model.play_once("2H_Melee_Attack_Spinning", 0.55)
 	else:
+		model.play_once("Spellcast_Shoot", 0.5)
 		for p in get_tree().get_nodes_in_group("players"):
 			if not p.dead and p.global_position.distance_to(global_position) < 5.5:
 				p.take_damage(damage * 1.6)
@@ -289,12 +303,21 @@ func take_damage(amount: float, crit := false, from: Node3D = null) -> void:
 	_bar.set_ratio(hp / max_hp)
 	if state != "chase":
 		alert(from if from else _nearest_player())
-	var m: StandardMaterial3D = _mesh.material_override
-	m.albedo_color = Color.WHITE
-	get_tree().create_timer(0.08).timeout.connect(func():
-		if is_instance_valid(self):
-			m.albedo_color = _color)
+	model.flash()
 	if hp <= 0:
-		_telegraph.visible = false
-		killed.emit(self)
-		queue_free()
+		_die()
+
+
+func _die() -> void:
+	_telegraph.visible = false
+	_bar.visible = false
+	remove_from_group("enemies")
+	collision_layer = 0
+	collision_mask = 0
+	killed.emit(self)
+	model.play_once("Death_A", 1.0)
+	model._locked_until = INF
+	var tw := create_tween()
+	tw.tween_interval(1.6)
+	tw.tween_property(self, "position:y", position.y - 1.5, 0.8)
+	tw.tween_callback(queue_free)

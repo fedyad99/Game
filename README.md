@@ -18,3 +18,9 @@
 
 ## Карта
 Карта «Лес» задаётся данными в `scripts/maps/forest_map.gd`: стены, камни, лагеря монстров, боссы.
+
+## Графика
+3D-модели — бесплатные паки KayKit от Kay Lousberg (CC0, www.kaylousberg.com):
+Adventurers (герой), Skeletons (враги), Halloween Bits (окружение). Лицензии лежат рядом с моделями в `assets/kaykit/`.
+
+Скриншоты для проверки картинки: `xvfb-run godot --rendering-method gl_compatibility --path . -s tests/screenshot.gd -- <папка>`.
