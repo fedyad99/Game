@@ -16,7 +16,8 @@ func _initialize() -> void:
 	prof.chests = 3
 	prof.talent_points = 4
 	prof.talents = {"vitality": 2, "might": 1, "second_wind": 1}
-	prof.owned = ["w_greatsword", "w_battle_axe", "ar_guard", "am_dragon", "ar_leather", "m_staff"]
+	prof.owned = ["w_greatsword", "w_battle_axe", "w_knight_sword", "w_executioner", "ar_guard", "am_dragon", "ar_leather",
+		"ar_chain", "am_fang", "am_bloodstone", "m_staff", "a_heavy"]
 	prof.equipped = {"weapon_warrior": "w_greatsword", "armor": "ar_guard", "amulet": "am_dragon"}
 	prof.selected_class = "warrior"
 	menu = load("res://scenes/menu.tscn").instantiate()
@@ -30,6 +31,12 @@ func _shot(name_: String) -> void:
 func _process(_d: float) -> bool:
 	frames += 1
 	match frames:
+		50:
+			menu._select_item("w_executioner")
+		52:
+			var ic: Control = menu._bag_grid.get_child(1)
+			root.warp_mouse(ic.get_global_rect().get_center())
+			menu._on_icon_hover(ic, true)
 		60: _shot("menu_hero")
 		61: menu._show_page("talents")
 		70: _shot("menu_talents")
@@ -37,7 +44,9 @@ func _process(_d: float) -> bool:
 			menu._show_page("chests")
 			menu._open_chest()
 		100: _shot("menu_chests")
-		101: menu._show_page("library")
+		101:
+			menu._lib_sel = "a_siege"
+			menu._show_page("library")
 		110: _shot("menu_library")
 		111:
 			menu._show_page("hero")

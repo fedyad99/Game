@@ -5,6 +5,7 @@ const Classes := preload("res://scripts/player/classes.gd")
 const Items := preload("res://scripts/meta/items.gd")
 const Talents := preload("res://scripts/meta/talents.gd")
 const CharacterModel := preload("res://scripts/game/character_model.gd")
+const ItemIcon := preload("res://scripts/ui/item_icon.gd")
 const GOLD := Color(0.95, 0.75, 0.3)
 const STAT_NAMES := {"max_hp": "Здоровье", "damage": "Урон", "attack_range": "Дальность"}
 
@@ -16,13 +17,21 @@ var _preview_root: Node3D
 var _preview_model: Node3D
 var _class_buttons := {}
 var _hero_info: Label
-var _equip_box: VBoxContainer
+var _equip_row: HBoxContainer
 var _bag_grid: GridContainer
+var _hero_detail: HBoxContainer
+var _hero_sel := ""          # выбранный предмет на вкладке «Герой»
+var _lib_detail: VBoxContainer
+var _lib_sel := ""
+var _tooltip: PanelContainer
+var _tooltip_box: VBoxContainer
+var _tooltip_owner: Control
 var _talent_grid: GridContainer
 var _talent_points: Label
 var _chest_count: Label
 var _chest_result: PanelContainer
 var _chest_result_label: Label
+var _chest_result_icon: CenterContainer
 var _chest_draw: Control
 var _library_box: VBoxContainer
 var _popup: PanelContainer
@@ -43,6 +52,7 @@ func _ready() -> void:
 	_pages["chests"] = _build_chest_page()
 	_pages["library"] = _build_library_page()
 	_build_popup()
+	_build_tooltip()
 	_show_page("hero")
 	_select_class(profile.selected_class)
 	if not profile.last_run.is_empty():
@@ -93,26 +103,67 @@ func _page() -> Control:
 	return p
 
 
-## Карточка предмета: рамка цвета редкости, название, слот, характеристики.
-func _item_tile(it: Dictionary, width: float, state := "") -> Button:
+## Описание предмета в контейнер: название, редкость и слот, характеристики, состояние.
+func _fill_info(box: Container, it: Dictionary, state := "", name_size := 20) -> void:
+	for c in box.get_children():
+		c.queue_free()
 	var col: Color = Items.RARITY_COLOR[it.rarity]
-	var b := Button.new()
-	b.focus_mode = Control.FOCUS_NONE
+	var title := _label(it.name, name_size, col.lightened(0.25))
+	box.add_child(title)
 	var slot_text: String = Items.SLOT_NAME[it.slot]
 	if it.slot == "weapon":
 		slot_text += " · " + Classes.CLASSES[it.cls].name
-	b.text = "%s\n%s · %s\n%s" % [it.name, slot_text, Items.RARITY_NAME[it.rarity], Items.describe(it)]
+	box.add_child(_label("%s · %s" % [Items.RARITY_NAME[it.rarity], slot_text], 14, Color(0.75, 0.72, 0.82)))
+	for line in Items.describe(it).split("\n"):
+		box.add_child(_label(line, 16, Color(0.55, 0.95, 0.55)))
 	if state != "":
-		b.text += "\n" + state
-	b.alignment = HORIZONTAL_ALIGNMENT_LEFT
-	b.custom_minimum_size = Vector2(width, 96)
-	b.add_theme_font_size_override("font_size", 13)
-	b.add_theme_color_override("font_color", col.lightened(0.35))
-	b.add_theme_color_override("font_hover_color", Color.WHITE)
-	b.add_theme_stylebox_override("normal", _sb(Color(0.12, 0.1, 0.14), col, 2, 8))
-	b.add_theme_stylebox_override("hover", _sb(Color(0.2, 0.16, 0.22), col.lightened(0.3), 3, 8))
-	b.add_theme_stylebox_override("pressed", _sb(Color(0.2, 0.16, 0.22), col, 3, 8))
-	return b
+		box.add_child(_label(state, 14, Color(0.95, 0.85, 0.55)))
+
+
+func _icon(it: Dictionary, size_px := 78.0) -> Control:
+	var ic := ItemIcon.create(it, size_px)
+	ic.hovered.connect(_on_icon_hover)
+	return ic
+
+
+# ---------- Подсказка при наведении ----------
+
+func _build_tooltip() -> void:
+	_tooltip = PanelContainer.new()
+	_tooltip.visible = false
+	_tooltip.top_level = true
+	_tooltip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tooltip.z_index = 10
+	add_child(_tooltip)
+	_tooltip_box = VBoxContainer.new()
+	_tooltip_box.add_theme_constant_override("separation", 2)
+	_tooltip_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tooltip.add_child(_tooltip_box)
+
+
+func _on_icon_hover(ic: Control, on: bool) -> void:
+	if not on or ic.item.is_empty():
+		if _tooltip_owner == ic or not on:
+			_tooltip.visible = false
+			_tooltip_owner = null
+		return
+	_tooltip_owner = ic
+	var it: Dictionary = ic.item
+	_fill_info(_tooltip_box, it, _state_text(it))
+	_tooltip.add_theme_stylebox_override("panel", _sb(Color(0.06, 0.05, 0.08, 0.96), Items.RARITY_COLOR[it.rarity], 2, 8))
+	_tooltip.reset_size()
+	_tooltip.visible = true
+
+
+func _state_text(it: Dictionary) -> String:
+	if profile.is_equipped(it.id):
+		return "Надето"
+	if not it.id in profile.owned:
+		return "Ещё не найдено"
+	var key := Items.equip_key(it)
+	if profile.equipped.has(key):
+		return "Сейчас надето: " + Items.by_id(profile.equipped[key]).name
+	return "В сумке"
 
 
 # ---------- Верх: название, ресурсы, вкладки ----------
@@ -230,20 +281,26 @@ func _build_hero_page() -> Control:
 	var v := VBoxContainer.new()
 	v.add_theme_constant_override("separation", 6)
 	panel.add_child(v)
-	v.add_child(_label("Надето (нажми, чтобы снять)", 17))
-	_equip_box = VBoxContainer.new()
-	_equip_box.add_theme_constant_override("separation", 4)
-	v.add_child(_equip_box)
-	v.add_child(_label("Сумка (нажми, чтобы надеть)", 17))
+	v.add_child(_label("Надето", 17))
+	_equip_row = HBoxContainer.new()
+	_equip_row.add_theme_constant_override("separation", 14)
+	v.add_child(_equip_row)
+	v.add_child(_label("Сумка", 17))
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(520, 140)
+	scroll.custom_minimum_size = Vector2(520, 172)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	v.add_child(scroll)
 	_bag_grid = GridContainer.new()
-	_bag_grid.columns = 2
-	_bag_grid.add_theme_constant_override("h_separation", 6)
-	_bag_grid.add_theme_constant_override("v_separation", 6)
+	_bag_grid.columns = 6
+	_bag_grid.add_theme_constant_override("h_separation", 8)
+	_bag_grid.add_theme_constant_override("v_separation", 8)
 	scroll.add_child(_bag_grid)
+	var sep := HSeparator.new()
+	v.add_child(sep)
+	_hero_detail = HBoxContainer.new()
+	_hero_detail.add_theme_constant_override("separation", 12)
+	_hero_detail.custom_minimum_size = Vector2(520, 130)
+	v.add_child(_hero_detail)
 	return p
 
 
@@ -275,44 +332,64 @@ func _show_model(cheer := false) -> void:
 
 
 func _process(delta: float) -> void:
+	if _tooltip.visible:
+		if not is_instance_valid(_tooltip_owner) or not _tooltip_owner.is_visible_in_tree():
+			_tooltip.visible = false
+		else:
+			var vp := get_viewport_rect().size
+			var pos := get_global_mouse_position() + Vector2(18, 18)
+			pos.x = min(pos.x, vp.x - _tooltip.size.x - 6)
+			pos.y = min(pos.y, vp.y - _tooltip.size.y - 6)
+			_tooltip.position = pos
 	if _preview_model and _pages["hero"].visible:
 		_preview_model.rotation.y += delta * 0.4
 
 
 func _refresh_hero() -> void:
 	var cls: String = profile.selected_class
-	for c in _equip_box.get_children():
+	if _hero_sel != "" and not _hero_sel in profile.owned:
+		_hero_sel = ""
+	var sel_it := Items.by_id(_hero_sel)
+	if not sel_it.is_empty() and sel_it.slot == "weapon" and sel_it.cls != cls:
+		_hero_sel = ""
+	for c in _equip_row.get_children():
 		c.queue_free()
 	for key in ["weapon_" + cls, "armor", "amulet"]:
+		var slot: String = "weapon" if key.begins_with("weapon") else key
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", 2)
+		_equip_row.add_child(col)
+		var ic: Control
 		if profile.equipped.has(key):
 			var it := Items.by_id(profile.equipped[key])
-			var b := _item_tile(it, 520)
-			b.custom_minimum_size.y = 80
-			b.pressed.connect(func():
-				profile.unequip(key)
-				_show_model()
-				_refresh())
-			_equip_box.add_child(b)
+			ic = _icon(it, 92)
+			ic.equipped = true
+			ic.selected = it.id == _hero_sel
+			ic.pressed.connect(func(_i): _select_item(it.id))
+			ic.activated.connect(func(_i): _toggle_equip(it.id))
 		else:
-			var slot: String = "weapon" if key.begins_with("weapon") else key
-			var l := _label("%s: стандартное" % Items.SLOT_NAME[slot] if slot == "weapon" else "%s: пусто" % Items.SLOT_NAME[slot], 15, Color(0.6, 0.6, 0.65))
-			l.custom_minimum_size = Vector2(520, 40)
-			l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			_equip_box.add_child(l)
+			ic = ItemIcon.create({}, 92)
+			ic.slot_hint = slot
+			ic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.add_child(ic)
+		var name_l := _label(Items.SLOT_NAME[slot], 13, Color(0.75, 0.72, 0.82))
+		name_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_l.custom_minimum_size.x = 92
+		col.add_child(name_l)
 	for c in _bag_grid.get_children():
 		c.queue_free()
 	for id in profile.owned:
 		var it := Items.by_id(id)
 		if it.is_empty() or profile.is_equipped(id) or (it.slot == "weapon" and it.cls != cls):
 			continue
-		var b := _item_tile(it, 257)
-		b.pressed.connect(func():
-			profile.equip(id)
-			_show_model(true)
-			_refresh())
-		_bag_grid.add_child(b)
+		var ic := _icon(it, 78)
+		ic.selected = id == _hero_sel
+		ic.pressed.connect(func(_i): _select_item(id))
+		ic.activated.connect(func(_i): _toggle_equip(id))
+		_bag_grid.add_child(ic)
 	if _bag_grid.get_child_count() == 0:
 		_bag_grid.add_child(_label("Пусто. Открывай сундуки!", 15, Color(0.6, 0.6, 0.65)))
+	_refresh_hero_detail()
 	# Итоговые характеристики
 	var info: Dictionary = Classes.CLASSES[cls]
 	var bonus: Dictionary = profile.total_bonus(cls)
@@ -331,6 +408,50 @@ func _refresh_hero() -> void:
 	if extra.size() > 0:
 		lines.append(", ".join(extra))
 	_hero_info.text = "\n".join(lines)
+
+
+func _select_item(id: String) -> void:
+	_hero_sel = id
+	_refresh_hero()
+
+
+func _toggle_equip(id: String) -> void:
+	if profile.is_equipped(id):
+		profile.unequip(Items.equip_key(Items.by_id(id)))
+		_show_model()
+	else:
+		profile.equip(id)
+		_show_model(true)
+	_tooltip.visible = false
+	_refresh()
+
+
+## Нижняя часть панели: выбранный предмет крупно, его характеристики и кнопка Надеть/Снять.
+func _refresh_hero_detail() -> void:
+	for c in _hero_detail.get_children():
+		c.queue_free()
+	var it := Items.by_id(_hero_sel)
+	if it.is_empty():
+		var hint := _label("Наведи мышку на предмет, чтобы увидеть характеристики.\nНажми на предмет, чтобы выбрать его.\nДвойной клик сразу надевает или снимает.", 15, Color(0.65, 0.62, 0.75))
+		hint.custom_minimum_size = Vector2(520, 120)
+		hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		_hero_detail.add_child(hint)
+		return
+	var big := ItemIcon.create(it, 116)
+	big.equipped = profile.is_equipped(it.id)
+	big.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_hero_detail.add_child(big)
+	var info := VBoxContainer.new()
+	info.add_theme_constant_override("separation", 1)
+	info.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_hero_detail.add_child(info)
+	_fill_info(info, it, _state_text(it), 19)
+	var on: bool = profile.is_equipped(it.id)
+	var btn := _button("Снять" if on else "Надеть", 18, Color(0.35, 0.15, 0.1) if on else Color(0.15, 0.32, 0.15))
+	btn.custom_minimum_size = Vector2(120, 52)
+	btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	btn.pressed.connect(_toggle_equip.bind(it.id))
+	_hero_detail.add_child(btn)
 
 
 # ---------- Вкладка «Таланты» ----------
@@ -425,10 +546,16 @@ func _build_chest_page() -> Control:
 	_chest_result.custom_minimum_size = Vector2(460, 150)
 	_chest_result.visible = false
 	p.add_child(_chest_result)
+	var hb := HBoxContainer.new()
+	hb.add_theme_constant_override("separation", 16)
+	hb.alignment = BoxContainer.ALIGNMENT_CENTER
+	_chest_result.add_child(hb)
+	_chest_result_icon = CenterContainer.new()
+	hb.add_child(_chest_result_icon)
 	_chest_result_label = _label("", 20)
 	_chest_result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_chest_result_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_chest_result.add_child(_chest_result_label)
+	hb.add_child(_chest_result_label)
 	return p
 
 
@@ -463,6 +590,11 @@ func _open_chest() -> void:
 	_chest_bounce()
 	var text := ""
 	var border := GOLD
+	for c in _chest_result_icon.get_children():
+		c.queue_free()
+	if res.has("item"):
+		var ic := _icon(res.item, 100)
+		_chest_result_icon.add_child(ic)
 	match res.type:
 		"item":
 			var it: Dictionary = res.item
@@ -492,12 +624,20 @@ func _build_library_page() -> Control:
 	var p := _page()
 	var scroll := ScrollContainer.new()
 	scroll.position = Vector2(24, 96)
-	scroll.size = Vector2(940, 520)
+	scroll.size = Vector2(820, 520)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	p.add_child(scroll)
 	_library_box = VBoxContainer.new()
 	_library_box.add_theme_constant_override("separation", 8)
 	scroll.add_child(_library_box)
+	var panel := PanelContainer.new()
+	panel.position = Vector2(866, 96)
+	panel.custom_minimum_size = Vector2(390, 520)
+	panel.add_theme_stylebox_override("panel", _sb())
+	p.add_child(panel)
+	_lib_detail = VBoxContainer.new()
+	_lib_detail.add_theme_constant_override("separation", 6)
+	panel.add_child(_lib_detail)
 	return p
 
 
@@ -511,23 +651,63 @@ func _refresh_library() -> void:
 	_library_box.add_child(_label("Найдено %d из %d предметов" % [found, Items.ITEMS.size()], 18, Color(1, 0.85, 0.45)))
 	var groups := [["Оружие воина", "weapon", "warrior"], ["Оружие лучника", "weapon", "archer"], ["Оружие мага", "weapon", "mage"],
 		["Доспехи", "armor", ""], ["Амулеты", "amulet", ""]]
+	var table := GridContainer.new()
+	table.columns = 2
+	table.add_theme_constant_override("h_separation", 34)
+	table.add_theme_constant_override("v_separation", 14)
+	_library_box.add_child(table)
 	for g in groups:
-		_library_box.add_child(_label(g[0], 17, Color(0.85, 0.8, 0.95)))
-		var grid := GridContainer.new()
-		grid.columns = 4
-		grid.add_theme_constant_override("h_separation", 6)
-		grid.add_theme_constant_override("v_separation", 6)
-		_library_box.add_child(grid)
+		var cell := VBoxContainer.new()
+		cell.add_theme_constant_override("separation", 6)
+		table.add_child(cell)
+		cell.add_child(_label(g[0], 17, Color(0.85, 0.8, 0.95)))
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 10)
+		cell.add_child(row)
 		for it in Items.ITEMS:
 			if it.slot != g[1] or (g[2] != "" and it.get("cls", "") != g[2]):
 				continue
-			var have: bool = it.id in profile.owned
-			var state := "Надето" if profile.is_equipped(it.id) else ("Есть" if have else "Не найдено")
-			var b := _item_tile(it, 228, state)
-			if not have:
-				b.modulate = Color(1, 1, 1, 0.45)
-			b.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			grid.add_child(b)
+			var ic := _icon(it, 84)
+			ic.owned = it.id in profile.owned
+			ic.equipped = profile.is_equipped(it.id)
+			ic.selected = it.id == _lib_sel
+			ic.pressed.connect(func(_i):
+				_lib_sel = it.id
+				_refresh_library())
+			row.add_child(ic)
+	_refresh_lib_detail()
+
+
+func _refresh_lib_detail() -> void:
+	for c in _lib_detail.get_children():
+		c.queue_free()
+	var it := Items.by_id(_lib_sel)
+	if it.is_empty():
+		var hint := _label("Все предметы игры.\n\nНаведи мышку на предмет —\nпокажутся характеристики.\nНажми — предмет откроется здесь.\n\nТусклые с замком ещё не найдены:\nих дают сундуки.", 16, Color(0.7, 0.67, 0.8))
+		_lib_detail.add_child(hint)
+		return
+	var center := CenterContainer.new()
+	_lib_detail.add_child(center)
+	var big := ItemIcon.create(it, 170)
+	big.owned = it.id in profile.owned
+	big.equipped = profile.is_equipped(it.id)
+	big.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	center.add_child(big)
+	var info := VBoxContainer.new()
+	info.add_theme_constant_override("separation", 3)
+	_lib_detail.add_child(info)
+	_fill_info(info, it, _state_text(it), 24)
+	var look := ""
+	if it.slot == "armor":
+		look = "Внешний вид: плащ этого цвета."
+	elif it.slot == "amulet":
+		look = "Внешний вид: светящийся круг под ногами."
+	else:
+		look = "Внешний вид: это оружие в руках героя."
+	var l := _label(look, 14, Color(0.7, 0.67, 0.8))
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size.x = 360
+	_lib_detail.add_child(l)
 
 
 # ---------- Всплывающее окно ----------
