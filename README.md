@@ -24,3 +24,10 @@
 Adventurers (герой), Skeletons (враги), Halloween Bits (окружение). Лицензии лежат рядом с моделями в `assets/kaykit/`.
 
 Скриншоты для проверки картинки: `xvfb-run godot --rendering-method gl_compatibility --path . -s tests/screenshot.gd -- <папка>`.
+
+## Меню и прогресс
+- `scenes/menu.tscn` — лагерь: вкладки Герой, Таланты, Сундуки, Библиотека.
+- `scripts/meta/profile.gd` (автозагрузка `Profile`) — золото, сундуки, таланты, экипировка; сохранение в `user://profile.json`.
+- `scripts/meta/items.gd` — каталог экипировки (20 предметов), `scripts/meta/talents.gd` — таланты.
+- Классы: `scripts/player/classes.gd` (воин, лучник, маг).
+- Тесты принимают класс: `... -s tests/smoke_test.gd -- archer`. Скриншоты меню: `tests/menu_shots.gd`.

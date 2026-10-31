@@ -27,6 +27,20 @@ const CARDS := [
 		"rarity": "rare", "icon": "shield"},
 	{"id": "reach", "class": "warrior", "title": "Длинный клинок", "desc": "+0.5 к дальности удара", "stat": "attack_range", "value": 0.5,
 		"rarity": "epic", "icon": "blade"},
+	# Лучник
+	{"id": "volley", "class": "archer", "title": "Залп", "desc": "Навык: каждые 5 с 10 стрел во все стороны", "skill": "volley",
+		"once": true, "rarity": "legendary", "icon": "arrows"},
+	{"id": "eagle_eye", "class": "archer", "title": "Орлиный глаз", "desc": "+2 к дальности выстрела", "stat": "attack_range", "value": 2.0,
+		"rarity": "rare", "icon": "eye"},
+	{"id": "quick_hands", "class": "archer", "title": "Быстрые руки", "desc": "+18% к скорости стрельбы", "stat": "attack_speed_mult", "value": 0.18,
+		"rarity": "epic", "icon": "bolt"},
+	# Маг
+	{"id": "meteor", "class": "mage", "title": "Метеор", "desc": "Навык: каждые 6 с метеор по ближайшему врагу", "skill": "meteor",
+		"once": true, "rarity": "legendary", "icon": "meteor"},
+	{"id": "inferno", "class": "mage", "title": "Пламя", "desc": "+18% к урону заклинаний", "stat": "damage_mult", "value": 0.18,
+		"rarity": "epic", "icon": "flame"},
+	{"id": "ice_armor", "class": "mage", "title": "Ледяная броня", "desc": "-12% получаемого урона", "stat": "damage_taken_mult", "value": -0.12,
+		"rarity": "rare", "icon": "shield"},
 ]
 
 

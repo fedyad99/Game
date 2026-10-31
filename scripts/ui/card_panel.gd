@@ -1,5 +1,6 @@
 extends Control
-## Выбор одной из трёх карточек при повышении уровня. Игра на паузе, пока панель открыта.
+## Выбор одной из трёх карточек при повышении уровня. Игра НЕ останавливается:
+## выбрать можно мышкой, касанием или клавишами 1, 2, 3.
 
 signal card_chosen(card: Dictionary)
 
@@ -7,12 +8,14 @@ const CardView := preload("res://scripts/ui/card_view.gd")
 
 var _holder: Control
 var _title: Label
+var _cards: Array = []
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	var dim := ColorRect.new()
-	dim.color = Color(0.03, 0.02, 0.06, 0.7)
+	dim.color = Color(0.03, 0.02, 0.06, 0.35)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
 	_title = Label.new()
@@ -34,8 +37,9 @@ func _ready() -> void:
 func show_cards(cards: Array, level := 0) -> void:
 	for c in _holder.get_children():
 		c.queue_free()
+	_cards = cards
 	if level > 0:
-		_title.text = "Уровень %d! Выбери карточку" % level
+		_title.text = "Уровень %d! Выбери карточку  (1 · 2 · 3)" % level
 	var vp := get_viewport_rect().size
 	var gap := 36.0
 	var total := cards.size() * CardView.SIZE.x + (cards.size() - 1) * gap
@@ -47,4 +51,21 @@ func show_cards(cards: Array, level := 0) -> void:
 		_holder.add_child(v)
 		v.appear(0.08 * i)
 		v.chosen.connect(func(card): card_chosen.emit(card))
+		var key := Label.new()
+		key.text = str(i + 1)
+		key.add_theme_font_size_override("font_size", 26)
+		key.add_theme_color_override("font_color", Color(1, 0.85, 0.45))
+		key.add_theme_constant_override("outline_size", 8)
+		key.add_theme_color_override("font_outline_color", Color(0.2, 0.08, 0.0))
+		key.position = v.position + Vector2(CardView.SIZE.x / 2 - 8, -44)
+		_holder.add_child(key)
 	visible = true
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible or not (event is InputEventKey) or not event.pressed or event.echo:
+		return
+	var idx := [KEY_1, KEY_2, KEY_3].find(event.physical_keycode)
+	if idx >= 0 and idx < _cards.size():
+		card_chosen.emit(_cards[idx])
+		get_viewport().set_input_as_handled()

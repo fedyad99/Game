@@ -6,6 +6,7 @@ const EnemyScript := preload("res://scripts/enemies/enemy.gd")
 const CardPanel := preload("res://scripts/ui/card_panel.gd")
 const TouchControls := preload("res://scripts/ui/touch_controls.gd")
 const Hud := preload("res://scripts/ui/hud.gd")
+const FloatingTextScript := preload("res://scripts/ui/floating_text.gd")
 const DeckPanel := preload("res://scripts/ui/deck_panel.gd")
 const MapData := preload("res://scripts/maps/forest_map.gd")
 const WorldBuilder := preload("res://scripts/maps/world_builder.gd")
@@ -16,10 +17,12 @@ const HEAL_ORB_CHANCE := 0.15
 
 var player: CharacterBody3D
 var camera_offset := Vector3(0, 12, 8.5)
+var forced_class := ""   # для тестов: класс без профиля
 var camera: Camera3D
 var run_time := 0.0
 var finished := false
 var kills := 0
+var minibosses_killed := 0
 var gold := 0
 var respawns: Array = []   # [{kind, power, home, t}]
 
@@ -35,6 +38,11 @@ func _ready() -> void:
 	randomize()
 	_build_world()
 	player = PlayerScript.new()
+	var cls: String = forced_class if forced_class != "" else Profile.selected_class
+	if forced_class != "":
+		player.setup_class(cls)   # тесты: без экипировки и талантов
+	else:
+		player.setup_class(cls, Profile.total_bonus(cls), Profile.look(cls))
 	player.position = MapData.START
 	add_child(player)
 	camera = Camera3D.new()
@@ -84,6 +92,7 @@ func _build_ui() -> void:
 	add_child(ui)
 	hud = Hud.new()
 	hud.deck_pressed.connect(_toggle_deck)
+	hud.portrait_color = {"warrior": Color(0.2, 0.3, 0.55), "archer": Color(0.2, 0.45, 0.25), "mage": Color(0.4, 0.22, 0.55)}.get(player.player_class, Color(0.2, 0.3, 0.55))
 	ui.add_child(hud)
 
 	var touch := TouchControls.new()
@@ -137,6 +146,21 @@ func _build_ui() -> void:
 		get_tree().paused = false
 		get_tree().reload_current_scene())
 	ev.add_child(again)
+	var camp := Button.new()
+	camp.text = "В лагерь"
+	camp.custom_minimum_size = Vector2(260, 56)
+	camp.add_theme_font_size_override("font_size", 20)
+	for st in ["normal", "hover", "pressed"]:
+		var cs := StyleBoxFlat.new()
+		cs.bg_color = Color(0.15, 0.12, 0.2) if st == "normal" else Color(0.25, 0.2, 0.32)
+		cs.border_color = Color(0.95, 0.75, 0.3)
+		cs.set_border_width_all(2)
+		cs.set_corner_radius_all(10)
+		camp.add_theme_stylebox_override(st, cs)
+	camp.pressed.connect(func():
+		get_tree().paused = false
+		get_tree().change_scene_to_file("res://scenes/menu.tscn"))
+	ev.add_child(camp)
 
 
 func _on_hp_changed(hp: float, mx: float) -> void:
@@ -172,10 +196,17 @@ func _process(delta: float) -> void:
 	if finished:
 		return
 	run_time += delta
+	# Пока открыты карточки, левая кнопка мыши выбирает карточку, а не бьёт
+	player.mouse_attack = not (card_panel.visible or deck_panel.visible)
 	hud.time_s = run_time
 	hud.kills = kills
 	hud.gold = gold
-	hud.skill_ratio = clamp(player.whirl_cooldown / 4.0, 0.0, 1.0) if "whirlwind" in player.skills else -1.0
+	if player.skills.is_empty():
+		hud.skill_ratio = -1.0
+	else:
+		var sk: String = player.skills[0]
+		hud.skill_name = player.Classes.SKILLS[sk].name
+		hud.skill_ratio = clamp(player.skill_cd.get(sk, 0.0) / player.Classes.SKILLS[sk].cd, 0.0, 1.0)
 	_update_boss_bar()
 	_update_respawns(delta)
 
@@ -206,6 +237,9 @@ func _on_enemy_killed(e, power: float) -> void:
 		respawns.append({"kind": e.kind, "power": power, "home": e.home, "t": RESPAWN_TIME})
 		if randf() < HEAL_ORB_CHANCE:
 			_drop_heal_orb(e.global_position)
+	if e.kind == "miniboss":
+		minibosses_killed += 1
+		FloatingTextScript.spawn(self, e.global_position + Vector3(0, 4, 0), "Сундук!", Color(1, 0.8, 0.3), true)
 	if e.kind == "boss":
 		_end_run(true)
 
@@ -243,7 +277,6 @@ func _on_level_up() -> void:
 
 
 func _show_cards() -> void:
-	get_tree().paused = true
 	card_panel.show_cards(Cards.roll(player.player_class, player.skills), player.level - pending_levelups + 1)
 
 
@@ -254,7 +287,6 @@ func _on_card_chosen(card: Dictionary) -> void:
 		_show_cards()
 	else:
 		card_panel.visible = false
-		get_tree().paused = finished
 
 
 func _end_run(victory: bool) -> void:
@@ -263,7 +295,11 @@ func _end_run(victory: bool) -> void:
 	finished = true
 	get_tree().paused = true
 	card_panel.visible = false
+	Profile.add_run_rewards(gold, minibosses_killed, victory, run_time, player.level, kills)
+	var r: Dictionary = Profile.last_run
+	Profile.last_run = {}
 	end_label.text = ("ПОБЕДА!" if victory else "Ты погиб") + \
-		"\nВремя: %d:%02d   Уровень: %d\nУбито: %d   Золото: %d" % [
-			int(run_time) / 60, int(run_time) % 60, player.level, kills, gold]
+		"\nВремя: %d:%02d   Уровень: %d   Убито: %d\n\nНаграда: +%d золота, +%d сундук(ов)%s" % [
+			int(run_time) / 60, int(run_time) % 60, player.level, kills, r.gold, r.chests,
+			(", +%d очко таланта" % r.points) if r.points > 0 else ""]
 	end_panel.visible = true

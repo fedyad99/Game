@@ -16,7 +16,8 @@ const ART_COLOR := {
 	"heart": Color(0.75, 0.15, 0.2), "sword": Color(0.55, 0.25, 0.15), "boot": Color(0.2, 0.5, 0.3),
 	"bolt": Color(0.75, 0.45, 0.05), "cross": Color(0.2, 0.55, 0.3), "target": Color(0.6, 0.2, 0.2),
 	"drop": Color(0.45, 0.05, 0.15), "spiral": Color(0.25, 0.3, 0.7), "shield": Color(0.3, 0.35, 0.45),
-	"blade": Color(0.35, 0.3, 0.5),
+	"blade": Color(0.35, 0.3, 0.5), "arrows": Color(0.3, 0.45, 0.25), "eye": Color(0.2, 0.4, 0.55),
+	"meteor": Color(0.55, 0.2, 0.08), "flame": Color(0.65, 0.25, 0.05),
 }
 
 var card: Dictionary
@@ -204,5 +205,21 @@ func _icon(kind: String, c: Vector2) -> void:
 		"shield":
 			_poly([Vector2(-30, -36), Vector2(30, -36), Vector2(30, 0), Vector2(0, 40), Vector2(-30, 0)], c, 1.0, Color(0.75, 0.78, 0.85))
 			_poly([Vector2(-4, -30), Vector2(4, -30), Vector2(4, 28), Vector2(-4, 28)], c, 1.0, Color(0.85, 0.65, 0.25))
+		"arrows":
+			for i in 3:
+				var o := Vector2(-18 + i * 18, 0)
+				_poly([Vector2(-2, 30), Vector2(-2, -24), Vector2(2, -24), Vector2(2, 30)], c + o, 1.0, col)
+				_poly([Vector2(-8, -22), Vector2(0, -38), Vector2(8, -22)], c + o, 1.0, Color(0.8, 0.8, 0.85))
+		"eye":
+			_poly([Vector2(-40, 0), Vector2(-20, -18), Vector2(20, -18), Vector2(40, 0), Vector2(20, 18), Vector2(-20, 18)], c, 1.0, col)
+			draw_circle(c, 14, Color(0.2, 0.5, 0.8))
+			draw_circle(c, 7, Color(0.05, 0.05, 0.1))
+		"meteor":
+			_poly([Vector2(-34, -34), Vector2(-4, -6), Vector2(-14, 4)], c, 1.0, Color(1, 0.7, 0.2))
+			draw_circle(c + Vector2(6, 8), 20, Color(1, 0.5, 0.1))
+			draw_circle(c + Vector2(8, 10), 12, Color(1, 0.85, 0.4))
+		"flame":
+			_poly([Vector2(0, -42), Vector2(22, -6), Vector2(26, 18), Vector2(0, 38), Vector2(-26, 18), Vector2(-20, -10), Vector2(-8, 0)], c, 1.0, Color(1, 0.55, 0.1))
+			_poly([Vector2(0, -10), Vector2(12, 12), Vector2(0, 30), Vector2(-12, 12)], c, 1.0, Color(1, 0.9, 0.4))
 		_:
 			draw_circle(c, 30, col)

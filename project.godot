@@ -3,11 +3,12 @@ config_version=5
 
 [application]
 config/name="Coop Roguelite"
-run/main_scene="res://scenes/main.tscn"
+run/main_scene="res://scenes/menu.tscn"
 config/features=PackedStringArray("4.3", "Mobile")
 
 [autoload]
 Cards="*res://scripts/cards/card_db.gd"
+Profile="*res://scripts/meta/profile.gd"
 
 [display]
 window/size/viewport_width=1280

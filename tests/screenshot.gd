@@ -10,7 +10,9 @@ func _initialize() -> void:
 	var args := OS.get_cmdline_user_args()
 	if args.size() > 0:
 		out = args[0]
+	root.get_node("Profile").autosave = false
 	main = load("res://scenes/main.tscn").instantiate()
+	main.forced_class = args[1] if args.size() > 1 else "warrior"
 	root.add_child(main)
 
 

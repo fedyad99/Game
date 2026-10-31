@@ -88,6 +88,46 @@ func flash(color := Color(1, 1, 1)) -> void:
 				mi.material_overlay = null)
 
 
+## Внешний вид от экипировки: оружие и вторая рука уже переданы в setup,
+## здесь — цвет плаща (доспех) и светящийся круг под ногами (амулет).
+func apply_look(lk: Dictionary) -> void:
+	if lk.has("cape"):
+		for mi in find_children("*Cape*", "MeshInstance3D", true, false):
+			var src: Material = mi.get_active_material(0)
+			if src is StandardMaterial3D:
+				var m: StandardMaterial3D = src.duplicate()
+				m.albedo_color = lk.cape
+				mi.material_override = m
+	if lk.has("aura"):
+		var c: Color = lk.aura
+		var ring := MeshInstance3D.new()
+		var tor := TorusMesh.new()
+		tor.inner_radius = 0.75
+		tor.outer_radius = 0.95
+		ring.mesh = tor
+		ring.position.y = 0.08
+		ring.scale = Vector3(1, 0.15, 1) / scale
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(c, 0.7)
+		m.emission_enabled = true
+		m.emission = c
+		m.emission_energy_multiplier = 2.5
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		ring.material_override = m
+		ring.name = "Aura"
+		add_child(ring)
+		var light := OmniLight3D.new()
+		light.light_color = c
+		light.light_energy = 0.8
+		light.omni_range = 2.5
+		light.position.y = 0.6
+		add_child(light)
+		var tw := ring.create_tween().set_loops()
+		tw.tween_property(m, "albedo_color:a", 0.3, 0.8)
+		tw.tween_property(m, "albedo_color:a", 0.7, 0.8)
+
+
 ## Окраска модели (для боссов: отличить от обычных врагов).
 func tint(color: Color) -> void:
 	for mi in find_children("*", "MeshInstance3D", true, false):

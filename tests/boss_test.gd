@@ -7,7 +7,11 @@ var frames := 0
 
 
 func _initialize() -> void:
+	# Класс можно передать аргументом: ... -s tests/xxx.gd -- archer
+	var args := OS.get_cmdline_user_args()
+	root.get_node("Profile").autosave = false
 	main = load("res://scenes/main.tscn").instantiate()
+	main.forced_class = args[0] if args.size() > 0 else "warrior"
 	root.add_child(main)
 
 
@@ -35,7 +39,7 @@ func _process(_delta: float) -> bool:
 	else:
 		p.touch_move = Vector2.ZERO
 	if main.finished or frames > 60 * 180:
-		print("RESULT boss victory=%s dead=%s time=%.0fs hp=%.0f/%.0f boss_hp=%s stats=%s skills=%s" % [
+		print("RESULT[%s] " % main.player.player_class, " boss victory=%s dead=%s time=%.0fs hp=%.0f/%.0f boss_hp=%s stats=%s skills=%s" % [
 			main.finished and not p.dead, p.dead, frames / 60.0, p.hp, p.stats.max_hp,
 			(int(boss.hp) if boss else 0), p.stats, p.skills])
 		return true

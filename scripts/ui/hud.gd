@@ -18,6 +18,8 @@ var gold := 0
 var boss_name := ""
 var boss_hp := 0.0
 var boss_max := 1.0
+var skill_name := ""
+var portrait_color := Color(0.2, 0.3, 0.55)   # цвет портрета зависит от класса
 var skill_ratio := -1.0   # -1 = навыка нет, 0..1 = доля оставшейся перезарядки
 var _shown_hp := 100.0    # плавная «тень» урона на полоске
 var _level_pulse := 0.0
@@ -103,8 +105,8 @@ func _draw_player_frame() -> void:
 	# Портрет
 	draw_circle(c, 50, Color(0.15, 0.1, 0.06))
 	draw_circle(c, 46, GOLD.darkened(0.15))
-	draw_circle(c, 41, Color(0.2, 0.3, 0.55))
-	draw_circle(c + Vector2(0, -6), 30, Color(0.28, 0.4, 0.68))
+	draw_circle(c, 41, portrait_color)
+	draw_circle(c + Vector2(0, -6), 30, portrait_color.lightened(0.2))
 	# Шлем-эмблема
 	var helm := PackedVector2Array([c + Vector2(-16, 14), c + Vector2(-18, -10), c + Vector2(-8, -22), c + Vector2(8, -22),
 		c + Vector2(18, -10), c + Vector2(16, 14), c + Vector2(6, 22), c + Vector2(-6, 22)])
@@ -179,4 +181,4 @@ func _draw_skill(c: Vector2) -> void:
 			var a := -PI / 2 + TAU * skill_ratio * i / steps
 			pts.append(c + Vector2(cos(a), sin(a)) * 24)
 		draw_colored_polygon(pts, Color(0, 0, 0, 0.6))
-	_text(c + Vector2(-40, 46), "Вихрь", 14, Color(1, 0.9, 0.7), 80, HORIZONTAL_ALIGNMENT_CENTER)
+	_text(c + Vector2(-40, 46), skill_name, 14, Color(1, 0.9, 0.7), 80, HORIZONTAL_ALIGNMENT_CENTER)

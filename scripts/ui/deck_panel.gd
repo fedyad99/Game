@@ -1,5 +1,6 @@
 extends Control
 ## Окно «Мои карточки»: все карточки, взятые в этом забеге. Открывается кнопкой или клавишей Tab.
+## Игра при этом НЕ останавливается.
 
 const CardView := preload("res://scripts/ui/card_view.gd")
 const DECK_SCALE := 0.78
@@ -13,7 +14,8 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	visible = false
 	var dim := ColorRect.new()
-	dim.color = Color(0.03, 0.02, 0.06, 0.82)
+	dim.color = Color(0.03, 0.02, 0.06, 0.6)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
 	var title := Label.new()
@@ -97,12 +99,10 @@ func show_deck(taken: Array, player) -> void:
 	_stats.text = "Урон %d   ·   Здоровье %d   ·   Скорость атаки x%.2f   ·   Крит %d%%   ·   Вампиризм %d%%" % [
 		st.damage * st.damage_mult, st.max_hp, st.attack_speed_mult, st.crit_chance * 100, st.lifesteal * 100]
 	visible = true
-	get_tree().paused = true
 
 
 func hide_deck() -> void:
 	visible = false
-	get_tree().paused = false
 
 
 func _unhandled_input(event: InputEvent) -> void:

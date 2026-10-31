@@ -9,7 +9,11 @@ var max_frames := 60 * 60 * 12   # 12 игровых минут
 
 
 func _initialize() -> void:
+	# Класс можно передать аргументом: ... -s tests/xxx.gd -- archer
+	var args := OS.get_cmdline_user_args()
+	root.get_node("Profile").autosave = false
 	main = load("res://scenes/main.tscn").instantiate()
+	main.forced_class = args[0] if args.size() > 0 else "warrior"
 	root.add_child(main)
 
 
