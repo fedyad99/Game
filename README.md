@@ -11,3 +11,10 @@
 - `scenes/` — сцены
 - `scripts/player`, `scripts/enemies`, `scripts/cards`, `scripts/net` — код
 - `assets/` — графика (CC0: Kenney, Quaternius)
+
+## Тесты
+- `godot --headless --fixed-fps 60 --path . -s tests/smoke_test.gd` — бот проходит забег по карте.
+- `godot --headless --fixed-fps 60 --path . -s tests/boss_test.gd` — бой героя 12 уровня с боссом.
+
+## Карта
+Карта «Лес» задаётся данными в `scripts/maps/forest_map.gd`: стены, камни, лагеря монстров, боссы.

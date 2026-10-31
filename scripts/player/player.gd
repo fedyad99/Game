@@ -1,6 +1,8 @@
 extends CharacterBody3D
 ## Воин: ручное движение и удар мечом по дуге перед собой.
 
+const FloatingText := preload("res://scripts/ui/floating_text.gd")
+
 signal hp_changed(hp: float, max_hp: float)
 signal xp_changed(xp: int, need: int, level: int)
 signal leveled_up
@@ -11,6 +13,7 @@ var stats := {
 	"max_hp": 100.0, "damage": 30.0, "damage_mult": 1.0, "move_speed": 6.0,
 	"move_speed_mult": 1.0, "attack_speed_mult": 1.0, "regen": 0.0,
 	"damage_taken_mult": 1.0, "attack_range": 2.8,
+	"crit_chance": 0.05, "lifesteal": 0.0,
 }
 var skills: Array[String] = []
 var hp := 100.0
@@ -20,6 +23,7 @@ var attack_cooldown := 0.0
 var whirl_cooldown := 0.0
 var facing := Vector3.FORWARD
 var dead := false
+var out_of_combat := 0.0   # секунд без урона; после 4 с идёт быстрое восстановление
 var touch_move := Vector2.ZERO   # из виртуального стика
 var touch_attack := false
 
@@ -86,7 +90,9 @@ func _physics_process(delta: float) -> void:
 		look_at(global_position + facing, Vector3.UP)
 	move_and_slide()
 
-	hp = min(hp + stats.regen * delta, stats.max_hp)
+	out_of_combat += delta
+	var regen: float = stats.regen + (stats.max_hp * 0.05 if out_of_combat > 4.0 else 0.0)
+	hp = min(hp + regen * delta, stats.max_hp)
 	attack_cooldown -= delta
 	whirl_cooldown -= delta
 	var want_attack := Input.is_physical_key_pressed(KEY_SPACE) \
@@ -106,7 +112,26 @@ func attack() -> void:
 		var to: Vector3 = e.global_position - global_position
 		to.y = 0
 		if to.length() <= stats.attack_range * e.scale.x and facing.dot(to.normalized()) > 0.0:
-			e.take_damage(stats.damage * stats.damage_mult)
+			_hit(e, 1.0)
+
+
+## Один удар по врагу: шанс крита (x2) и вампиризм.
+func _hit(e: Node, mult: float) -> void:
+	var crit: bool = randf() < stats.crit_chance
+	var dmg: float = stats.damage * stats.damage_mult * mult * (2.0 if crit else 1.0)
+	e.take_damage(dmg, crit, self)
+	if stats.lifesteal > 0.0:
+		heal(dmg * stats.lifesteal, false)
+
+
+func heal(amount: float, show := true) -> void:
+	if dead:
+		return
+	var before := hp
+	hp = min(hp + amount, stats.max_hp)
+	if show and hp - before >= 1.0:
+		FloatingText.spawn(get_parent(), global_position + Vector3(0, 2.3, 0), "+%d" % int(hp - before), Color(0.3, 1, 0.4))
+	hp_changed.emit(hp, stats.max_hp)
 
 
 ## Автонаведение: удар разворачивает героя к ближайшему врагу рядом (удобно на телефоне).
@@ -131,7 +156,7 @@ func whirlwind() -> void:
 	_flash_swing()
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if e.global_position.distance_to(global_position) <= stats.attack_range * 1.3:
-			e.take_damage(stats.damage * stats.damage_mult * 0.8)
+			_hit(e, 0.8)
 
 
 func _flash_swing() -> void:
@@ -142,7 +167,10 @@ func _flash_swing() -> void:
 func take_damage(amount: float) -> void:
 	if dead:
 		return
-	hp -= amount * max(stats.damage_taken_mult, 0.2)
+	out_of_combat = 0.0
+	var dmg: float = amount * max(stats.damage_taken_mult, 0.2)
+	hp -= dmg
+	FloatingText.spawn(get_parent(), global_position + Vector3(0, 2.3, 0), str(int(round(dmg))), Color(1, 0.3, 0.3))
 	if hp <= 0:
 		hp = 0
 		dead = true
