@@ -11,6 +11,8 @@ var kind := "arrow"
 var life := 1.2
 var aoe_radius := 0.0
 var _hit_done := false
+var pierce := false          # пронзающая стрела летит сквозь врагов
+var _pierced: Array = []
 
 
 func _ready() -> void:
@@ -52,6 +54,12 @@ func _physics_process(delta: float) -> void:
 	for e in get_tree().get_nodes_in_group("enemies"):
 		var to: Vector3 = e.global_position + Vector3(0, 1.0, 0) - global_position
 		if Vector2(to.x, to.z).length() < 0.6 + 0.4 * e.scale.x and absf(to.y) < 2.0 * e.scale.y:
+			if pierce:
+				if not e in _pierced:
+					_pierced.append(e)
+					if is_instance_valid(owner_player):
+						owner_player.hit_enemy(e, mult)
+				continue
 			_explode(e)
 			return
 
@@ -66,6 +74,9 @@ func _explode(first: Node) -> void:
 				if e.global_position.distance_to(global_position) <= aoe_radius:
 					owner_player.hit_enemy(e, mult)
 			_boom()
+			var sfx := get_node_or_null("/root/Sfx")
+			if sfx:
+				sfx.play("explosion", -2.0)
 		else:
 			owner_player.hit_enemy(first, mult)
 	queue_free()

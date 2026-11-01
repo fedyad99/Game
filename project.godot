@@ -8,6 +8,7 @@ config/icon="res://icon.png"
 config/features=PackedStringArray("4.3", "Mobile")
 
 [autoload]
+Sfx="*res://scripts/audio/sfx.gd"
 Cards="*res://scripts/cards/card_db.gd"
 Profile="*res://scripts/meta/profile.gd"
 

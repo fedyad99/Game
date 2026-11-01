@@ -1,4 +1,5 @@
 extends SceneTree
+const TalentTreeData := preload("res://scripts/meta/talent_tree.gd")
 ## Скриншоты для проверки картинки:
 ## xvfb-run godot --rendering-method gl_compatibility --path . -s tests/screenshot.gd -- <папка>
 var main: Node
@@ -13,6 +14,10 @@ func _initialize() -> void:
 	root.get_node("Profile").autosave = false
 	main = load("res://scenes/main.tscn").instantiate()
 	main.forced_class = args[1] if args.size() > 1 else "warrior"
+	if args.size() > 2 and args[2] == "skills":
+		for k in TalentTreeData.SKILLS:
+			if TalentTreeData.SKILLS[k].cls == main.forced_class:
+				main.extra_skills.append(k)
 	root.add_child(main)
 
 

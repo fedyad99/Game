@@ -53,6 +53,8 @@ var _spawn_lock := 0.0
 var _color := Color.RED
 var _bar: Node3D
 var _telegraph: MeshInstance3D
+var slow_time := 0.0      # Ледяная нова: замедление
+var _sfx: Node
 
 
 func setup(k: String, power: float, name_override := "") -> void:
@@ -138,6 +140,8 @@ func _nearest_player() -> Node3D:
 
 ## Тревога: враг начинает преследовать игрока (вызывается и для соседей по лагерю).
 func alert(p: Node3D) -> void:
+	if is_boss and state != "chase" and kind == "boss":
+		_play("boss_roar", 4.0)
 	if state == "chase" or p == null:
 		return
 	state = "chase"
@@ -148,6 +152,11 @@ func alert(p: Node3D) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if slow_time > 0.0:
+		slow_time -= delta
+		delta *= 0.5   # замедленный враг и думает, и бьёт медленнее
+		if slow_time <= 0.0:
+			model.tint_clear()
 	hit_cooldown -= delta
 	ability_cooldown -= delta
 	if hp <= 0:
@@ -179,6 +188,8 @@ func _physics_process(delta: float) -> void:
 
 
 func _move_dir(dir: Vector3, spd: float) -> void:
+	if slow_time > 0.0:
+		spd *= 0.5
 	velocity.x = dir.x * spd
 	velocity.z = dir.z * spd
 	if dir.length() > 0.1:
@@ -232,6 +243,7 @@ func _chase(delta: float) -> void:
 		if hit_cooldown <= 0.0 and dist < 13.0:
 			hit_cooldown = 1.8
 			_shoot(to.normalized())
+			_play("arrow", -6.0)
 			model.play_once("1H_Ranged_Shoot", 0.6)
 		return
 	var reach := 1.0 + 0.6 * scale.x
@@ -243,6 +255,7 @@ func _chase(delta: float) -> void:
 		if hit_cooldown <= 0.0:
 			hit_cooldown = 1.7 if is_boss else 1.2
 			target.take_damage(damage)
+			_play("swing", -4.0)
 			model.play_once("2H_Melee_Attack_Chop" if kind == "brute" else "1H_Melee_Attack_Chop", 0.6)
 
 
@@ -282,8 +295,10 @@ func _finish_ability() -> void:
 		_charge_time = 0.55
 		_charge_hit = false
 		model.play_once("2H_Melee_Attack_Spinning", 0.55)
+		_play("dash")
 	else:
 		model.play_once("Spellcast_Shoot", 0.5)
+		_play("slam", 2.0)
 		for p in get_tree().get_nodes_in_group("players"):
 			if not p.dead and p.global_position.distance_to(global_position) < 5.5:
 				p.take_damage(damage * 1.6)
@@ -304,11 +319,26 @@ func take_damage(amount: float, crit := false, from: Node3D = null) -> void:
 	if state != "chase":
 		alert(from if from else _nearest_player())
 	model.flash()
+	_play("crit" if crit else "hit", -3.0)
 	if hp <= 0:
 		_die()
 
 
+func slow(t: float) -> void:
+	if slow_time <= 0.0:
+		model.tint_add(Color(0.55, 0.8, 1.0))
+	slow_time = max(slow_time, t)
+
+
+func _play(name_: String, db := 0.0) -> void:
+	if _sfx == null:
+		_sfx = get_node_or_null("/root/Sfx")
+	if _sfx:
+		_sfx.play_at(name_, global_position, db)
+
+
 func _die() -> void:
+	_play("bones", 0.0 if not is_boss else 4.0)
 	_telegraph.visible = false
 	_bar.visible = false
 	remove_from_group("enemies")

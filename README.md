@@ -26,8 +26,13 @@ Adventurers (герой), Skeletons (враги), Halloween Bits (окружен
 Скриншоты для проверки картинки: `xvfb-run godot --rendering-method gl_compatibility --path . -s tests/screenshot.gd -- <папка>`.
 
 ## Меню и прогресс
-- `scenes/menu.tscn` — лагерь: вкладки Герой, Таланты, Сундуки, Библиотека.
-- `scripts/meta/profile.gd` (автозагрузка `Profile`) — золото, сундуки, таланты, экипировка; сохранение в `user://profile.json`.
-- `scripts/meta/items.gd` — каталог экипировки (20 предметов), `scripts/meta/talents.gd` — таланты.
-- Классы: `scripts/player/classes.gd` (воин, лучник, маг).
-- Тесты принимают класс: `... -s tests/smoke_test.gd -- archer`. Скриншоты меню: `tests/menu_shots.gd`.
+- `scenes/menu.tscn` — лагерь: вкладки Герой, Таланты, Сундуки, Библиотека. При первом запуске — выбор класса; дальше смена класса стоит 150 золота.
+- `scripts/meta/profile.gd` (автозагрузка `Profile`) — золото, сундуки, дерево талантов по классам, экипировка; сохранение в `user://profile.json`.
+- `scripts/meta/items.gd` — каталог экипировки (39 предметов, слоты: оружие, доспех, амулет, кольцо).
+- `scripts/meta/talent_tree.gd` — дерево талантов в духе Path of Exile: у каждого класса свой старт и два уникальных навыка.
+- Сундуки: 70% новый предмет (без повторов), 30% очки талантов; золота в сундуках нет.
+- Иконки оружия: `tests/render_icons.gd` рисует их из 3D-моделей в `assets/icons/items/`.
+
+## Звук
+- Все звуки и музыка синтезированы скриптом `tools/make_sounds.py` (numpy, scipy, ffmpeg) в `assets/audio/`.
+- Автозагрузка `Sfx` (`scripts/audio/sfx.gd`): `Sfx.play("hit")`, `Sfx.music("battle")`.

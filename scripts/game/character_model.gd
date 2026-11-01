@@ -136,3 +136,21 @@ func tint(color: Color) -> void:
 			var m: StandardMaterial3D = src.duplicate()
 			m.albedo_color = color
 			mi.material_override = m
+
+
+## Временный цветной налёт (замедление холодом) поверх обычных материалов.
+func tint_add(color: Color) -> void:
+	for mi in find_children("*", "MeshInstance3D", true, false):
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(color, 0.45)
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mi.material_overlay = m
+		mi.set_meta("tinted", true)
+
+
+func tint_clear() -> void:
+	for mi in find_children("*", "MeshInstance3D", true, false):
+		if mi.has_meta("tinted"):
+			mi.material_overlay = null
+			mi.remove_meta("tinted")

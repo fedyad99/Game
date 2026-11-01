@@ -18,9 +18,8 @@ var gold := 0
 var boss_name := ""
 var boss_hp := 0.0
 var boss_max := 1.0
-var skill_name := ""
+var skills: Array = []   # [[id, название, доля перезарядки 0..1], ...]
 var portrait_color := Color(0.2, 0.3, 0.55)   # цвет портрета зависит от класса
-var skill_ratio := -1.0   # -1 = навыка нет, 0..1 = доля оставшейся перезарядки
 var _shown_hp := 100.0    # плавная «тень» урона на полоске
 var _level_pulse := 0.0
 var _font: Font
@@ -68,8 +67,8 @@ func _draw() -> void:
 	_draw_info(vp)
 	if boss_name != "":
 		_draw_boss(vp)
-	if skill_ratio >= 0.0:
-		_draw_skill(Vector2(vp.x - 250, vp.y - 62))
+	for i in skills.size():
+		_draw_skill(Vector2(vp.x - 260 - i * 82, vp.y - 62), skills[i][0], skills[i][1], skills[i][2])
 
 
 func _rrect(r: Rect2, radius: int, col: Color, border := Color(0, 0, 0, 0), bw := 0) -> void:
@@ -168,12 +167,39 @@ func _draw_boss(vp: Vector2) -> void:
 		draw_polyline(d + PackedVector2Array([d[0]]), GOLD, 2, true)
 
 
-func _draw_skill(c: Vector2) -> void:
+const SKILL_COLORS := {"whirlwind": Color(0.6, 0.45, 0.2), "volley": Color(0.25, 0.55, 0.3), "meteor": Color(0.75, 0.3, 0.1),
+	"charge": Color(0.7, 0.25, 0.2), "warcry": Color(0.8, 0.5, 0.15), "trap": Color(0.45, 0.45, 0.5),
+	"pierce": Color(0.2, 0.5, 0.45), "frost_nova": Color(0.25, 0.55, 0.85), "chain_lightning": Color(0.35, 0.35, 0.85)}
+
+
+func _draw_skill(c: Vector2, id: String, skill_name: String, skill_ratio: float) -> void:
 	draw_circle(c, 30, Color(0.15, 0.1, 0.06))
-	draw_circle(c, 27, GOLD.darkened(0.15))
-	draw_circle(c, 24, Color(0.25, 0.3, 0.7))
-	for i in 3:
-		draw_arc(c, 6 + i * 6, i * 1.2, i * 1.2 + PI * 1.4, 16, Color(1, 0.95, 0.82), 3.0, true)
+	draw_circle(c, 27, GOLD.darkened(0.15) if skill_ratio <= 0.0 else GOLD.darkened(0.5))
+	draw_circle(c, 24, SKILL_COLORS.get(id, Color(0.25, 0.3, 0.7)))
+	var w := Color(1, 0.95, 0.82)
+	match id:
+		"charge", "pierce":
+			draw_line(c + Vector2(-12, 0), c + Vector2(12, 0), w, 3.0, true)
+			draw_colored_polygon(PackedVector2Array([c + Vector2(14, 0), c + Vector2(5, -7), c + Vector2(5, 7)]), w)
+			draw_line(c + Vector2(-14, -6), c + Vector2(-6, -6), w, 2.0, true)
+			draw_line(c + Vector2(-14, 6), c + Vector2(-6, 6), w, 2.0, true)
+		"warcry":
+			for i in 3:
+				draw_arc(c + Vector2(-8, 0), 6 + i * 6, -0.7, 0.7, 10, w, 2.5, true)
+		"trap":
+			draw_arc(c, 10, 0, TAU, 20, w, 3.0, true)
+			for i in 6:
+				var a := TAU * i / 6.0
+				draw_line(c + Vector2(cos(a), sin(a)) * 10, c + Vector2(cos(a), sin(a)) * 16, w, 2.0, true)
+		"frost_nova":
+			for i in 3:
+				var a := PI * i / 3.0
+				draw_line(c - Vector2(cos(a), sin(a)) * 14, c + Vector2(cos(a), sin(a)) * 14, w, 2.5, true)
+		"chain_lightning":
+			draw_polyline(PackedVector2Array([c + Vector2(4, -16), c + Vector2(-6, 0), c + Vector2(4, 0), c + Vector2(-4, 16)]), w, 3.0, true)
+		_:
+			for i in 3:
+				draw_arc(c, 6 + i * 6, i * 1.2, i * 1.2 + PI * 1.4, 16, w, 3.0, true)
 	if skill_ratio > 0.0:   # затемнение перезарядки по кругу
 		var pts := PackedVector2Array([c])
 		var steps := 32

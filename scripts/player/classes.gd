@@ -36,4 +36,11 @@ const SKILLS := {
 	"whirlwind": {"name": "Вихрь", "cd": 4.0},
 	"volley": {"name": "Залп", "cd": 5.0},
 	"meteor": {"name": "Метеор", "cd": 6.0},
+	# Уникальные навыки из дерева талантов
+	"charge": {"name": "Рывок", "cd": 6.0},
+	"warcry": {"name": "Клич", "cd": 12.0},
+	"trap": {"name": "Капкан", "cd": 7.0},
+	"pierce": {"name": "Прострел", "cd": 3.0},
+	"frost_nova": {"name": "Нова", "cd": 7.0},
+	"chain_lightning": {"name": "Молния", "cd": 4.0},
 }

@@ -60,6 +60,7 @@ func show_cards(cards: Array, level := 0) -> void:
 		key.position = v.position + Vector2(CardView.SIZE.x / 2 - 8, -44)
 		_holder.add_child(key)
 	visible = true
+	get_node("/root/Sfx").play("card_flip")
 
 
 func _unhandled_input(event: InputEvent) -> void:

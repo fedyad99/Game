@@ -18,6 +18,7 @@ const HEAL_ORB_CHANCE := 0.15
 var player: CharacterBody3D
 var camera_offset := Vector3(0, 12, 8.5)
 var forced_class := ""   # для тестов: класс без профиля
+var extra_skills: Array = []   # для тестов: навыки из дерева
 var camera: Camera3D
 var run_time := 0.0
 var finished := false
@@ -41,8 +42,12 @@ func _ready() -> void:
 	var cls: String = forced_class if forced_class != "" else Profile.selected_class
 	if forced_class != "":
 		player.setup_class(cls)   # тесты: без экипировки и талантов
+		for sk in extra_skills:
+			player.skills.append(sk)
 	else:
 		player.setup_class(cls, Profile.total_bonus(cls), Profile.look(cls))
+		for sk in Profile.tree_skills(cls):
+			player.skills.append(sk)
 	player.position = MapData.START
 	add_child(player)
 	camera = Camera3D.new()
@@ -56,6 +61,7 @@ func _ready() -> void:
 	_on_hp_changed(player.hp, player.stats.max_hp)
 	_on_xp_changed(0, player.xp_needed(), 1)
 	_place_enemies()
+	Sfx.music("battle")
 
 
 # ---------- Мир ----------
@@ -175,6 +181,7 @@ func _on_xp_changed(xp: int, need: int, lvl: int) -> void:
 
 
 func _toggle_deck() -> void:
+	Sfx.play("card_flip")
 	if deck_panel.visible:
 		deck_panel.hide_deck()
 	elif not card_panel.visible and not finished:
@@ -201,17 +208,16 @@ func _process(delta: float) -> void:
 	hud.time_s = run_time
 	hud.kills = kills
 	hud.gold = gold
-	if player.skills.is_empty():
-		hud.skill_ratio = -1.0
-	else:
-		var sk: String = player.skills[0]
-		hud.skill_name = player.Classes.SKILLS[sk].name
-		hud.skill_ratio = clamp(player.skill_cd.get(sk, 0.0) / player.Classes.SKILLS[sk].cd, 0.0, 1.0)
+	var sk_list := []
+	for sk in player.skills:
+		sk_list.append([sk, player.Classes.SKILLS[sk].name, clamp(player.skill_cd.get(sk, 0.0) / player.skill_cooldown(sk), 0.0, 1.0)])
+	hud.skills = sk_list
 	_update_boss_bar()
 	_update_respawns(delta)
 
 
 func _update_boss_bar() -> void:
+	var was: String = hud.boss_name
 	hud.boss_name = ""
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if e.is_boss and e.state == "chase":
@@ -219,6 +225,8 @@ func _update_boss_bar() -> void:
 			hud.boss_max = e.max_hp
 			hud.boss_hp = e.hp
 			break
+	if was != hud.boss_name and not finished:
+		Sfx.music("boss" if hud.boss_name != "" else "battle")
 
 
 func _update_respawns(delta: float) -> void:
@@ -232,6 +240,8 @@ func _update_respawns(delta: float) -> void:
 func _on_enemy_killed(e, power: float) -> void:
 	kills += 1
 	gold += e.gold_reward
+	if e.is_boss:
+		Sfx.play("coin")
 	player.add_xp(e.xp_reward)
 	if not e.is_boss:
 		respawns.append({"kind": e.kind, "power": power, "home": e.home, "t": RESPAWN_TIME})
@@ -266,6 +276,7 @@ func _drop_heal_orb(pos: Vector3) -> void:
 	orb.body_entered.connect(func(b):
 		if b.is_in_group("players") and not b.dead:
 			b.heal(20.0)
+			Sfx.play("pickup")
 			orb.queue_free())
 	add_child(orb)
 
@@ -281,6 +292,7 @@ func _show_cards() -> void:
 
 
 func _on_card_chosen(card: Dictionary) -> void:
+	Sfx.play("card_pick")
 	player.apply_card(card)
 	pending_levelups -= 1
 	if pending_levelups > 0 and not finished:
@@ -294,6 +306,8 @@ func _end_run(victory: bool) -> void:
 		return
 	finished = true
 	get_tree().paused = true
+	Sfx.music("")
+	Sfx.play("victory" if victory else "defeat")
 	card_panel.visible = false
 	Profile.add_run_rewards(gold, minibosses_killed, victory, run_time, player.level, kills)
 	var r: Dictionary = Profile.last_run

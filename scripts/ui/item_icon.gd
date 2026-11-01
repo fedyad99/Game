@@ -95,6 +95,8 @@ func _draw() -> void:
 		_draw_armor(r.get_center(), s.x * 0.34, item.look.get("cape", Color.GRAY) * mod)
 	elif item.slot == "amulet":
 		_draw_amulet(r.get_center(), s.x * 0.34, item.look.get("aura", Color.WHITE) * mod)
+	elif item.slot == "ring":
+		_draw_ring(r.get_center(), s.x * 0.34, item.look.get("gem", Color.WHITE) * mod, mod)
 	# Рамка
 	var bw := 3 if (_hover or selected) else 2
 	var border := col.lightened(0.35) if (_hover or selected) else col
@@ -156,6 +158,22 @@ func _draw_amulet(c: Vector2, k: float, col: Color) -> void:
 	draw_line(c + Vector2(0.75, -0.35) * k, g + Vector2(0.2, -0.5) * k, chain, 2.5, true)
 
 
+## Кольцо: золотой ободок в перспективе и камень сверху.
+func _draw_ring(c: Vector2, k: float, gem: Color, mod := Color.WHITE) -> void:
+	var band := Color(0.95, 0.78, 0.35) * mod
+	draw_set_transform(c + Vector2(0, k * 0.3), 0, Vector2(1, 0.55))
+	draw_arc(Vector2.ZERO, k * 0.85, 0, TAU, 32, band.darkened(0.35), k * 0.32, true)
+	draw_arc(Vector2.ZERO, k * 0.85, PI * 0.05, PI * 0.95, 16, band, k * 0.22, true)
+	draw_set_transform(Vector2.ZERO)
+	var g := c + Vector2(0, -k * 0.35)
+	draw_circle(g, k * 0.55, Color(gem, 0.25))
+	var pts := PackedVector2Array([g + Vector2(-k * 0.4, 0), g + Vector2(-k * 0.2, -k * 0.35), g + Vector2(k * 0.2, -k * 0.35), g + Vector2(k * 0.4, 0), g + Vector2(0, k * 0.4)])
+	draw_rect(Rect2(g + Vector2(-k * 0.3, k * 0.05), Vector2(k * 0.6, k * 0.3)), band.darkened(0.2))
+	draw_colored_polygon(pts, gem)
+	draw_polyline(pts + PackedVector2Array([pts[0]]), band, 2.0, true)
+	draw_line(g + Vector2(-k * 0.15, -k * 0.25), g + Vector2(-k * 0.28, -k * 0.02), Color(1, 1, 1, 0.6), 2.0, true)
+
+
 func _draw_lock(c: Vector2, k: float) -> void:
 	draw_arc(c + Vector2(0, -0.4) * k, 0.55 * k, PI, TAU, 12, Color(0.75, 0.75, 0.8), 3.0, true)
 	draw_rect(Rect2(c + Vector2(-0.85, -0.4) * k, Vector2(1.7, 1.3) * k), Color(0.75, 0.75, 0.8))
@@ -172,3 +190,5 @@ func _draw_slot_glyph(c: Vector2, k: float, col: Color) -> void:
 			_draw_armor(c, k, col)
 		"amulet":
 			_draw_amulet(c, k, col)
+		"ring":
+			_draw_ring(c, k, col, col)

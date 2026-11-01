@@ -1,4 +1,5 @@
 extends SceneTree
+const TalentTreeData := preload("res://scripts/meta/talent_tree.gd")
 ## Проверка босса: герой 12 уровня со случайными карточками у арены босса.
 ## Запуск: godot --headless --fixed-fps 60 --path . -s tests/boss_test.gd
 
@@ -12,6 +13,10 @@ func _initialize() -> void:
 	root.get_node("Profile").autosave = false
 	main = load("res://scenes/main.tscn").instantiate()
 	main.forced_class = args[0] if args.size() > 0 else "warrior"
+	if args.size() > 1 and args[1] == "skills":
+		for k in TalentTreeData.SKILLS:
+			if TalentTreeData.SKILLS[k].cls == main.forced_class:
+				main.extra_skills.append(k)
 	root.add_child(main)
 
 
