@@ -129,7 +129,7 @@ func _state(id: String) -> String:
 	if (n.cls != "" and n.cls != cls) or n.kind == "start":
 		return "locked"
 	if profile.is_reachable(cls, id):
-		return "ready" if profile.free_points(cls) > 0 else "near"
+		return "ready" if profile.free_points(cls) >= TalentTree.cost(n) else "near"
 	return "off"
 
 

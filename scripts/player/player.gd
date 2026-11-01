@@ -39,6 +39,7 @@ var model: Node3D
 var _whirl_fx: MeshInstance3D
 var _sfx: Node
 var buff_time := 0.0          # Боевой клич: +35% урона
+var autocast := true          # false — навыки только вручную (Q / E / R или касание иконки)
 
 
 var look := {}               # внешний вид от экипировки
@@ -134,9 +135,30 @@ func _physics_process(delta: float) -> void:
 		attack()
 	for sk in skills:
 		skill_cd[sk] = skill_cd.get(sk, 0.0) - delta
-		if skill_cd[sk] <= 0.0 and _use_skill(sk):
+		if autocast and skill_cd[sk] <= 0.0 and _use_skill(sk):
 			skill_cd[sk] = skill_cooldown(sk)
 	hp_changed.emit(hp, stats.max_hp)
+
+
+## Ручное применение навыка по номеру слота. false — ещё перезаряжается или не по кому бить.
+func cast_skill(i: int) -> bool:
+	if dead or i < 0 or i >= skills.size():
+		return false
+	var sk: String = skills[i]
+	if skill_cd.get(sk, 0.0) > 0.0:
+		return false
+	if _use_skill(sk):
+		skill_cd[sk] = skill_cooldown(sk)
+		return true
+	FloatingText.spawn(get_parent(), global_position + Vector3(0, 2.6, 0), "Нет цели", Color(0.8, 0.8, 0.8))
+	return false
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		var idx := [KEY_Q, KEY_E, KEY_R].find(event.physical_keycode)
+		if idx >= 0:
+			cast_skill(idx)
 
 
 func skill_cooldown(sk: String) -> float:

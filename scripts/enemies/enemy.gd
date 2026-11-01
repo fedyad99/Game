@@ -18,9 +18,9 @@ const TYPES := {
 		"model": "Skeleton_Rogue", "weapon": "Skeleton_Crossbow", "color": Color(0.9, 0.7, 0.2), "aggro": 12.0, "ranged": true},
 	"brute": {"name": "", "hp": 140.0, "dmg": 13.0, "speed": 2.6, "xp": 5, "gold": 3, "scale": 1.35,
 		"model": "Skeleton_Warrior", "weapon": "Skeleton_Axe", "color": Color(0.45, 0.3, 0.2), "aggro": 8.0},
-	"miniboss": {"name": "Вожак", "hp": 650.0, "dmg": 14.0, "speed": 3.2, "xp": 20, "gold": 15, "scale": 1.8,
+	"miniboss": {"name": "Вожак", "hp": 950.0, "dmg": 18.0, "speed": 3.2, "xp": 20, "gold": 15, "scale": 1.8,
 		"model": "Skeleton_Warrior", "weapon": "Skeleton_Blade", "offhand": "Skeleton_Shield_Small_A", "color": Color(0.65, 0.3, 0.9), "aggro": 12.0, "boss": true},
-	"boss": {"name": "Король тьмы", "hp": 2400.0, "dmg": 15.0, "speed": 3.0, "xp": 60, "gold": 60, "scale": 2.6,
+	"boss": {"name": "Король тьмы", "hp": 4200.0, "dmg": 20.0, "speed": 3.0, "xp": 60, "gold": 60, "scale": 2.6,
 		"model": "Skeleton_Mage", "weapon": "Skeleton_Staff", "color": Color(0.18, 0.15, 0.22), "aggro": 16.0, "boss": true},
 }
 
@@ -54,6 +54,8 @@ var _color := Color.RED
 var _bar: Node3D
 var _telegraph: MeshInstance3D
 var slow_time := 0.0      # Ледяная нова: замедление
+var _summons_left := [0.7, 0.4]   # босс зовёт скелетов на этих долях здоровья
+var enraged := false              # босс в ярости (меньше 25% здоровья)
 var _sfx: Node
 
 
@@ -253,7 +255,7 @@ func _chase(delta: float) -> void:
 		_move_dir(Vector3.ZERO, 0)
 		look_at(global_position + to, Vector3.UP)
 		if hit_cooldown <= 0.0:
-			hit_cooldown = 1.7 if is_boss else 1.2
+			hit_cooldown = (1.0 if enraged else 1.7) if is_boss else 1.2
 			target.take_damage(damage)
 			_play("swing", -4.0)
 			model.play_once("2H_Melee_Attack_Chop" if kind == "brute" else "1H_Melee_Attack_Chop", 0.6)
@@ -277,8 +279,8 @@ func _start_ability() -> void:
 		_telegraph.global_position = global_position + Vector3(0, 0.1, 0)
 		model.play_once("Taunt", _casting)
 	else:
-		ability_cooldown = 5.0
-		_casting = 1.1
+		ability_cooldown = 3.5 if hp < max_hp * 0.5 else 5.0
+		_casting = 0.8 if enraged else 1.1
 		_telegraph.mesh.top_radius = 5.5
 		_telegraph.mesh.bottom_radius = 5.5
 		_telegraph.global_position = global_position + Vector3(0, 0.1, 0)
@@ -320,8 +322,30 @@ func take_damage(amount: float, crit := false, from: Node3D = null) -> void:
 		alert(from if from else _nearest_player())
 	model.flash()
 	_play("crit" if crit else "hit", -3.0)
+	if kind == "boss" and hp > 0:
+		_boss_phases()
 	if hp <= 0:
 		_die()
+
+
+## Фазы босса: призыв скелетов на 70% и 40% здоровья, ярость ниже 25%.
+func _boss_phases() -> void:
+	if not _summons_left.is_empty() and hp < max_hp * _summons_left[0]:
+		_summons_left.pop_front()
+		_play("boss_roar", 4.0)
+		FloatingText.spawn(get_parent(), global_position + Vector3(0, 3.2 * scale.y, 0), "Восстаньте, слуги!", Color(0.8, 0.5, 1.0), true)
+		var main := get_parent()
+		if main.has_method("spawn_minion"):
+			for i in 4:
+				var a := TAU * i / 4.0 + randf() * 0.5
+				main.spawn_minion("grunt" if i % 2 == 0 else "archer", 1.6, global_position + Vector3(cos(a), 0, sin(a)) * 5.0)
+	if not enraged and hp < max_hp * 0.25:
+		enraged = true
+		speed *= 1.4
+		damage *= 1.2
+		model.tint(Color(1.0, 0.35, 0.3))
+		FloatingText.spawn(get_parent(), global_position + Vector3(0, 3.2 * scale.y, 0), "ЯРОСТЬ!", Color(1, 0.3, 0.2), true)
+		_play("warcry", 4.0)
 
 
 func slow(t: float) -> void:

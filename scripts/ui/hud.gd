@@ -3,6 +3,8 @@ extends Control
 ## полоска босса, ячейка навыка и кнопка «Мои карточки». Всё рисуется кодом.
 
 signal deck_pressed
+signal skill_pressed(i: int)
+signal autocast_toggled
 
 const GOLD := Color(0.95, 0.75, 0.3)
 const DARK := Color(0.08, 0.06, 0.1, 0.85)
@@ -24,6 +26,8 @@ var _shown_hp := 100.0    # плавная «тень» урона на поло
 var _level_pulse := 0.0
 var _font: Font
 var _deck_btn: Button
+var _auto_btn: Button
+var autocast := true
 
 
 func _ready() -> void:
@@ -45,6 +49,19 @@ func _ready() -> void:
 	_deck_btn.add_theme_color_override("font_color", Color(1, 0.9, 0.7))
 	_deck_btn.pressed.connect(func(): deck_pressed.emit())
 	add_child(_deck_btn)
+	_auto_btn = Button.new()
+	_auto_btn.focus_mode = Control.FOCUS_NONE
+	_auto_btn.custom_minimum_size = Vector2(190, 34)
+	_auto_btn.add_theme_font_size_override("font_size", 14)
+	for st in ["normal", "hover", "pressed"]:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = DARK if st == "normal" else Color(0.25, 0.15, 0.08, 0.95)
+		sb.border_color = GOLD.darkened(0.2)
+		sb.set_border_width_all(2)
+		sb.set_corner_radius_all(8)
+		_auto_btn.add_theme_stylebox_override(st, sb)
+	_auto_btn.pressed.connect(func(): autocast_toggled.emit())
+	add_child(_auto_btn)
 
 
 func set_level(l: int) -> void:
@@ -58,6 +75,9 @@ func _process(delta: float) -> void:
 	_level_pulse = max(0.0, _level_pulse - delta * 1.5)
 	var vp := get_viewport_rect().size
 	_deck_btn.position = Vector2(vp.x - 210, vp.y - 66)
+	_auto_btn.visible = not skills.is_empty()
+	_auto_btn.text = "Автонавыки: %s [T]" % ("вкл" if autocast else "выкл")
+	_auto_btn.position = Vector2(vp.x - 210, vp.y - 108)
 	queue_redraw()
 
 
@@ -68,7 +88,9 @@ func _draw() -> void:
 	if boss_name != "":
 		_draw_boss(vp)
 	for i in skills.size():
-		_draw_skill(Vector2(vp.x - 260 - i * 82, vp.y - 62), skills[i][0], skills[i][1], skills[i][2])
+		if not autocast and i < 3:
+			_text(_skill_pos(i) + Vector2(-30, -36), ["Q", "E", "R"][i], 15, Color(1, 0.9, 0.5), 60, HORIZONTAL_ALIGNMENT_CENTER)
+		_draw_skill(_skill_pos(i), skills[i][0], skills[i][1], skills[i][2])
 
 
 func _rrect(r: Rect2, radius: int, col: Color, border := Color(0, 0, 0, 0), bw := 0) -> void:
@@ -170,6 +192,27 @@ func _draw_boss(vp: Vector2) -> void:
 const SKILL_COLORS := {"whirlwind": Color(0.6, 0.45, 0.2), "volley": Color(0.25, 0.55, 0.3), "meteor": Color(0.75, 0.3, 0.1),
 	"charge": Color(0.7, 0.25, 0.2), "warcry": Color(0.8, 0.5, 0.15), "trap": Color(0.45, 0.45, 0.5),
 	"pierce": Color(0.2, 0.5, 0.45), "frost_nova": Color(0.25, 0.55, 0.85), "chain_lightning": Color(0.35, 0.35, 0.85)}
+
+
+func _skill_pos(i: int) -> Vector2:
+	var vp := get_viewport_rect().size
+	return Vector2(vp.x - 260 - (skills.size() - 1 - i) * 82, vp.y - 62)
+
+
+## Нажатие (мышь или палец) по иконке навыка — применить его вручную.
+func _input(event: InputEvent) -> void:
+	var pos := Vector2.INF
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		pos = event.position
+	elif event is InputEventScreenTouch and event.pressed:
+		pos = event.position
+	if pos == Vector2.INF:
+		return
+	for i in skills.size():
+		if pos.distance_to(_skill_pos(i)) < 32.0:
+			skill_pressed.emit(i)
+			get_viewport().set_input_as_handled()
+			return
 
 
 func _draw_skill(c: Vector2, id: String, skill_name: String, skill_ratio: float) -> void:

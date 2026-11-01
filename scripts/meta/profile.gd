@@ -6,10 +6,10 @@ const Items := preload("res://scripts/meta/items.gd")
 const TalentTree := preload("res://scripts/meta/talent_tree.gd")
 
 const SAVE_PATH := "user://profile.json"
-const SAVE_VERSION := 3
-const CHEST_PRICE := 60
-const CLASS_CHANGE_PRICE := 150
-const TREE_RESET_PRICE := 100
+const SAVE_VERSION := 4
+const CHEST_PRICE := 150
+const CLASS_CHANGE_PRICE := 300
+const TREE_RESET_PRICE := 200
 ## Шансы редкости предмета из сундука (дорогие — редко).
 const RARITY_ODDS := [["common", 0.62], ["rare", 0.27], ["epic", 0.09], ["legendary", 0.02]]
 const CLASSES := ["warrior", "archer", "mage"]
@@ -28,6 +28,7 @@ var best_time := 0.0
 var last_run := {}              # итоги последнего забега
 var sound_on := true
 var music_on := true
+var autocast := true            # навыки сами применяются; выключается в бою кнопкой или T
 var autosave := true            # тесты выключают запись на диск
 
 
@@ -68,9 +69,15 @@ func load_profile() -> void:
 	else:
 		points = data.get("points", {})
 		trees = data.get("trees", {})
+		if ver == 3:
+			# Узлы стали стоить по-разному: дерево сбрасывается, взятые узлы возвращаются очками (1 за узел)
+			for cls in trees:
+				add_points(cls, max(0, trees[cls].size() - 1))
+			trees = {}
 		class_chosen = bool(data.get("class_chosen", false))
 		sound_on = bool(data.get("sound_on", true))
 		music_on = bool(data.get("music_on", true))
+		autocast = bool(data.get("autocast", true))
 
 
 func save_profile() -> void:
@@ -82,7 +89,7 @@ func save_profile() -> void:
 	f.store_string(JSON.stringify({
 		"version": SAVE_VERSION, "gold": gold, "chests": chests, "selected_class": selected_class,
 		"class_chosen": class_chosen, "points": points, "trees": trees, "owned": owned, "equipped": equipped,
-		"runs": runs, "wins": wins, "best_time": best_time, "sound_on": sound_on, "music_on": music_on,
+		"runs": runs, "wins": wins, "best_time": best_time, "sound_on": sound_on, "music_on": music_on, "autocast": autocast,
 	}, "\t"))
 
 
@@ -104,6 +111,11 @@ func set_music(v: bool) -> void:
 	var sfx := get_node_or_null("/root/Sfx")
 	if sfx:
 		sfx.set_music_on(v)
+	save_profile()
+
+
+func set_autocast(v: bool) -> void:
+	autocast = v
 	save_profile()
 
 
@@ -195,7 +207,7 @@ func is_allocated(cls: String, id: String) -> bool:
 ## Узел можно взять, если он свободен, не чужой старт, соединён со взятым и есть очко.
 func can_allocate(cls: String, id: String) -> bool:
 	var n := TalentTree.node(id)
-	if n.is_empty() or is_allocated(cls, id) or n.kind == "start" or free_points(cls) <= 0:
+	if n.is_empty() or is_allocated(cls, id) or n.kind == "start" or free_points(cls) < TalentTree.cost(n):
 		return false
 	if n.cls != "" and n.cls != cls:
 		return false
@@ -213,14 +225,16 @@ func allocate(cls: String, id: String) -> bool:
 	if not can_allocate(cls, id):
 		return false
 	allocated(cls).append(id)
-	points[cls] = free_points(cls) - 1
+	points[cls] = free_points(cls) - TalentTree.cost(TalentTree.node(id))
 	save_profile()
 	return true
 
 
 ## Сброс дерева класса за золото: все очки возвращаются.
 func reset_tree(cls: String) -> bool:
-	var spent := allocated(cls).size() - 1
+	var spent := 0
+	for id in allocated(cls):
+		spent += TalentTree.cost(TalentTree.node(id))
 	if spent <= 0 or gold < TREE_RESET_PRICE:
 		return false
 	gold -= TREE_RESET_PRICE
@@ -271,7 +285,7 @@ func open_chest() -> Dictionary:
 		return {}
 	chests -= 1
 	var res := {}
-	var it := _roll_item() if randf() < 0.7 else {}
+	var it := _roll_item() if randf() < 0.75 else {}
 	if not it.is_empty():
 		owned.append(it.id)
 		var key := Items.equip_key(it)
@@ -279,7 +293,7 @@ func open_chest() -> Dictionary:
 			equipped[key] = it.id   # пустой слот — сразу надеваем
 		res = {"type": "item", "item": it}
 	else:
-		var p := 1 if randf() < 0.7 else 2
+		var p := 1
 		add_points(selected_class, p)
 		res = {"type": "talent", "points": p}
 	save_profile()
@@ -315,8 +329,11 @@ func _roll_item() -> Dictionary:
 func add_run_rewards(run_gold: int, minibosses: int, victory: bool, time_s: float, level: int, kills: int) -> void:
 	runs += 1
 	var bonus_gold := int(time_s / 10.0)
-	var new_chests := minibosses + (2 if victory else 0)
-	var new_points := minibosses + (2 if victory else 0)
+	var new_chests := (1 if victory else 0)
+	for i in minibosses:
+		if randf() < 0.5:
+			new_chests += 1   # мини-босс даёт сундук через раз
+	var new_points := 2 if victory else 0
 	if victory:
 		wins += 1
 		bonus_gold += 100

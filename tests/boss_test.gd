@@ -13,6 +13,10 @@ func _initialize() -> void:
 	root.get_node("Profile").autosave = false
 	main = load("res://scenes/main.tscn").instantiate()
 	main.forced_class = args[0] if args.size() > 0 else "warrior"
+	if "geared" in args:
+		# Средняя прокачка: эпическое оружие, хороший доспех и ~20 очков дерева
+		main.forced_bonus = {"damage": 8.0, "max_hp": 38.0, "max_hp_pct": 0.12, "damage_mult": 0.2, "crit_chance": 0.08,
+			"damage_taken_mult": -0.1, "lifesteal": 0.03, "attack_speed_mult": 0.08, "regen": 1.0}
 	if args.size() > 1 and args[1] == "skills":
 		for k in TalentTreeData.SKILLS:
 			if TalentTreeData.SKILLS[k].cls == main.forced_class:

@@ -854,7 +854,7 @@ func _build_talent_page() -> Control:
 	info.add_child(v)
 	_tree_points = _label("", 22, Color(0.6, 0.9, 1.0))
 	v.add_child(_tree_points)
-	v.add_child(_label("Бери узлы рядом с уже взятыми.\nПеретаскивай поле, колесо — масштаб.\nРомбы — уникальные навыки класса.", 13, Color(0.75, 0.72, 0.85)))
+	v.add_child(_label("Бери узлы рядом с уже взятыми. Цена: малый 1,\nособый 2, навык (ромб) и ключевой 3 очка.\nОчки: 2 за победу над боссом и из сундуков.", 13, Color(0.75, 0.72, 0.85)))
 	# Кнопки справа сверху
 	var tools := VBoxContainer.new()
 	tools.position = Vector2(1044, 110)
@@ -906,7 +906,7 @@ func _on_tree_hover(id: String, on: bool) -> void:
 	var col: Color = TalentTree.CLASS_COLOR.get(n.cls, Color(0.85, 0.8, 1.0))
 	var kind_name: String = {"start": "Старт класса", "small": "Талант", "notable": "Особый талант", "keystone": "Ключевой талант", "skill": "Уникальный навык"}[n.kind]
 	_tooltip_box.add_child(_label(n.name, 20, col.lightened(0.3) if n.kind != "small" else Color(1, 0.95, 0.85)))
-	_tooltip_box.add_child(_label(kind_name, 13, Color(0.7, 0.67, 0.8)))
+	_tooltip_box.add_child(_label(kind_name + ("" if n.kind == "start" else "  ·  цена: %d оч." % TalentTree.cost(n)), 13, Color(0.7, 0.67, 0.8)))
 	for line in TalentTree.describe(n).split("\n"):
 		_tooltip_box.add_child(_label(line, 16, Color(0.55, 0.95, 0.55) if n.kind != "skill" else Color(1, 0.88, 0.55)))
 	var cls: String = profile.selected_class
@@ -917,8 +917,8 @@ func _on_tree_hover(id: String, on: bool) -> void:
 		state = "Только для класса «%s»" % Classes.CLASSES[n.cls].name
 	elif not profile.is_reachable(cls, id):
 		state = "Сначала изучи соседний узел"
-	elif profile.free_points(cls) <= 0:
-		state = "Нет очков талантов"
+	elif profile.free_points(cls) < TalentTree.cost(n):
+		state = "Не хватает очков (нужно %d)" % TalentTree.cost(n)
 	else:
 		state = "Нажми, чтобы изучить"
 	_tooltip_box.add_child(_label(state, 14, Color(0.95, 0.85, 0.55)))
@@ -972,13 +972,13 @@ func _build_chest_page() -> Control:
 	ov.add_theme_constant_override("separation", 6)
 	odds_panel.add_child(ov)
 	ov.add_child(_header("Что внутри"))
-	ov.add_child(_label("Новый предмет — 70%   ·   Очки талантов — 30%", 16, Color(0.9, 0.88, 0.95)))
+	ov.add_child(_label("Новый предмет — 75%   ·   Очко таланта — 25%", 16, Color(0.9, 0.88, 0.95)))
 	var rr := HBoxContainer.new()
 	rr.add_theme_constant_override("separation", 16)
 	ov.add_child(rr)
 	for o in profile.RARITY_ODDS:
 		rr.add_child(_label("%s %d%%" % [Items.RARITY_NAME[o[0]], round(o[1] * 100)], 15, Items.RARITY_COLOR[o[0]].lightened(0.2)))
-	ov.add_child(_label("Повторов нет: выпадают только вещи, которых у тебя ещё нет.\nСундуки дают за мини-боссов (1) и за победу над боссом (2).", 14, Color(0.72, 0.7, 0.82)))
+	ov.add_child(_label("Повторов нет: выпадают только вещи, которых у тебя ещё нет.\nСундук даёт победа над боссом, а мини-босс — через раз.", 14, Color(0.72, 0.7, 0.82)))
 	_chest_result = PanelContainer.new()
 	_chest_result.position = Vector2(620, 320)
 	_chest_result.custom_minimum_size = Vector2(600, 190)

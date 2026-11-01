@@ -87,6 +87,11 @@ static func neighbors(id: String) -> Array:
 	return res
 
 
+## Цена узла в очках: малый 1, особый 2, ключевой и навык 3.
+static func cost(n: Dictionary) -> int:
+	return {"small": 1, "notable": 2, "keystone": 3, "skill": 3}.get(n.get("kind", ""), 0)
+
+
 static func start_of(cls: String) -> String:
 	return cls + "_start"
 

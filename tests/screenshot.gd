@@ -19,13 +19,20 @@ func _initialize() -> void:
 			if TalentTreeData.SKILLS[k].cls == main.forced_class:
 				main.extra_skills.append(k)
 	root.add_child(main)
+	manual = "manual" in args
 
 
 func _shot(name_: String) -> void:
 	root.get_viewport().get_texture().get_image().save_png("%s/%s.png" % [out, name_])
 
 
+var manual := false
+
+
 func _process(_d: float) -> bool:
+	if manual and main.player:
+		main.player.autocast = false
+		main.hud.autocast = false
 	frames += 1
 	var p = main.player
 	match frames:

@@ -19,6 +19,7 @@ var player: CharacterBody3D
 var camera_offset := Vector3(0, 12, 8.5)
 var forced_class := ""   # для тестов: класс без профиля
 var extra_skills: Array = []   # для тестов: навыки из дерева
+var forced_bonus := {}         # для тестов: прибавки «как от экипировки и талантов»
 var camera: Camera3D
 var run_time := 0.0
 var finished := false
@@ -41,13 +42,14 @@ func _ready() -> void:
 	player = PlayerScript.new()
 	var cls: String = forced_class if forced_class != "" else Profile.selected_class
 	if forced_class != "":
-		player.setup_class(cls)   # тесты: без экипировки и талантов
+		player.setup_class(cls, forced_bonus)   # тесты: без профиля
 		for sk in extra_skills:
 			player.skills.append(sk)
 	else:
 		player.setup_class(cls, Profile.total_bonus(cls), Profile.look(cls))
 		for sk in Profile.tree_skills(cls):
 			player.skills.append(sk)
+		player.autocast = Profile.autocast
 	player.position = MapData.START
 	add_child(player)
 	camera = Camera3D.new()
@@ -90,6 +92,18 @@ func _spawn(kind: String, power: float, pos: Vector3, name_override := "", respa
 	add_child(e)
 
 
+## Слуга босса: появляется из-под земли, не возрождается.
+func spawn_minion(kind: String, power: float, pos: Vector3) -> void:
+	var e: CharacterBody3D = EnemyScript.new()
+	e.setup(kind, power)
+	e.spawn_anim = true
+	e.position = Vector3(pos.x, MapData.START.y, pos.z)
+	e.set_meta("minion", true)
+	e.killed.connect(_on_enemy_killed.bind(power))
+	add_child(e)
+	e.alert(player)
+
+
 # ---------- Интерфейс ----------
 
 func _build_ui() -> void:
@@ -98,6 +112,9 @@ func _build_ui() -> void:
 	add_child(ui)
 	hud = Hud.new()
 	hud.deck_pressed.connect(_toggle_deck)
+	hud.skill_pressed.connect(func(i): player.cast_skill(i))
+	hud.autocast_toggled.connect(_toggle_autocast)
+	hud.autocast = player.autocast
 	hud.portrait_color = {"warrior": Color(0.2, 0.3, 0.55), "archer": Color(0.2, 0.45, 0.25), "mage": Color(0.4, 0.22, 0.55)}.get(player.player_class, Color(0.2, 0.3, 0.55))
 	ui.add_child(hud)
 
@@ -191,6 +208,16 @@ func _toggle_deck() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_TAB:
 		_toggle_deck()
+	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_T:
+		_toggle_autocast()
+
+
+func _toggle_autocast() -> void:
+	player.autocast = not player.autocast
+	hud.autocast = player.autocast
+	Sfx.play("click")
+	if forced_class == "":
+		Profile.set_autocast(player.autocast)
 
 
 # ---------- Игровой цикл ----------
@@ -243,7 +270,7 @@ func _on_enemy_killed(e, power: float) -> void:
 	if e.is_boss:
 		Sfx.play("coin")
 	player.add_xp(e.xp_reward)
-	if not e.is_boss:
+	if not e.is_boss and not e.has_meta("minion"):
 		respawns.append({"kind": e.kind, "power": power, "home": e.home, "t": RESPAWN_TIME})
 		if randf() < HEAL_ORB_CHANCE:
 			_drop_heal_orb(e.global_position)
